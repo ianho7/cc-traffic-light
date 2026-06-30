@@ -1,0 +1,34 @@
+# Rust build artifacts
+target/
+**/target/
+
+# Local diagnostic outputs
+*.log
+*.tmp
+*.bak
+taskbar-widget/target/
+taskbar-widget/diagnose-taskbar-loop/
+
+# Windows filesystem noise
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor and IDE state
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment and local machine config
+.env
+.env.*
+!.env.example
+
+# Generated crash/debug files
+*.pdb
+*.ilk
+*.dmp
+*.stackdump
