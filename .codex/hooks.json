@@ -1,0 +1,93 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SessionStart",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SessionStart",
+            "statusMessage": "Dumping Codex SessionStart hook shape"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName UserPromptSubmit",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName UserPromptSubmit",
+            "statusMessage": "Dumping Codex UserPromptSubmit hook shape"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PreToolUse",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PreToolUse",
+            "statusMessage": "Dumping Codex PreToolUse hook shape"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PermissionRequest",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PermissionRequest",
+            "statusMessage": "Dumping Codex PermissionRequest hook shape"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PostToolUse",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PostToolUse",
+            "statusMessage": "Dumping Codex PostToolUse hook shape"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SubagentStop",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SubagentStop",
+            "statusMessage": "Dumping Codex SubagentStop hook shape"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName Stop",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName Stop",
+            "statusMessage": "Dumping Codex Stop hook shape"
+          }
+        ]
+      }
+    ]
+  }
+}

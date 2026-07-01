@@ -1,0 +1,6 @@
+- Task: HCA-A-GATE, HCA-D-05, HCA-VAL-11, HCA-VAL-12
+- Encountered Problem: 这些任务需要临时修改或观察外部 Codex `notify` 配置，当前尚未获得用户对外部配置操作的确认。
+- Thought Process: checklist 明确要求不能自动修改 `C:\Users\admin\.codex\config.toml`，因此只能完成探针方案文档，不能执行实际 wrapper 安装或观察。
+- Options Considered: 自动修改外部配置；请求确认后继续；先记录 awaiting user confirmation 并保持 goal 未完成。
+- Chosen Solution: 保持相关 checklist item 未勾选，并在 `docs/checklist/codex-notify-probe.md` 中列出人工步骤、转发规则和停机条件。
+- Rationale: 这是 policy 边界，不是代码实现问题；继续执行实际 notify 探针前需要用户明确确认外部配置操作。

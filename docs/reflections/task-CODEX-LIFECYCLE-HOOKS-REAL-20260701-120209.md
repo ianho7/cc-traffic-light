@@ -1,0 +1,6 @@
+- Task: Codex lifecycle hooks real payload validation
+- Encountered Problem: 之前只验证了 Codex `notify`，其 stdin 为空，不能说明正式 lifecycle hooks 是否可作为状态来源。
+- Thought Process: 用项目级 `.codex/hooks.json` 加 shape-only dump hook，避免修改用户级配置；观察真实 Codex hook stdin 是否包含多任务 identity 字段。
+- Options Considered: 继续使用 `notify`；直接把 hooks 指到状态写入 CLI；先用 dump hook 采样真实 shape。
+- Chosen Solution: 先保留 dump hook，记录真实 payload shape，再决定是否切换为 `taskbar_widget_hook.exe codex <HookName>`。
+- Rationale: 真实 dump 已证明 lifecycle hooks stdin 是 JSON，且包含 `session_id`、`turn_id`、`hook_event_name`、`cwd`、`model`。这足以把 Codex lifecycle hooks 作为主状态来源，但正式写 state 前仍应由用户确认是否替换项目 hook command 并重新 trust。

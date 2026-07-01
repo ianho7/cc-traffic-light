@@ -1,0 +1,6 @@
+- Task: HCA-D-05 / HCA-VAL-11 / HCA-VAL-12
+- Encountered Problem: 用户执行真实 Codex notify 探针后，wrapper 输出显示 stdin 为空，未包含 session、thread、turn 或 event_order 相关字段，同时原 notify 被尝试转发但返回 exit code 1。
+- Thought Process: 先区分事实和推断：事实是 notify wrapper 拿到转发配置、记录到 argv shape、stdin byte_length 为 0、candidate paths 全为空、forward.attempted 为 true；推断是该 notify 入口无法稳定识别 task identity，因此不能进入任务状态主路径。
+- Options Considered: 一是把 turn-ended 作为全局 done 信号；二是继续推断 Codex 当前任务；三是按计划降级为低保真来源并等待正式 hooks 配置或更丰富 payload。
+- Chosen Solution: 记录真实观察结果，标记 Codex notify 为低保真来源，不接入 task 状态主路径，并保留 forward exit code 1 作为后续风险。
+- Rationale: 多任务状态依赖稳定 task identity。当前 notify 没有 session/thread/turn/event_order，强行作为状态主路径会污染聚合结果；保守记录能避免后续任务栏红绿灯逻辑误判。

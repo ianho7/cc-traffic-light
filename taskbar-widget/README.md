@@ -55,18 +55,31 @@ taskbar-widget/
   Cargo.toml
   Cargo.lock
   README.md
+  examples.codex-hooks.toml
+  examples.claude-hooks.json
   scripts/
     diagnose-taskbar-loop.ps1
   src/
+    agent_state.rs
+    hook_rules.rs
+    lib.rs
     main.rs
     taskbar.rs
     win32.rs
+    bin/
+      taskbar_widget_hook.rs
 ```
 
 职责划分：
 
 - `src/main.rs`
-  负责进程启动、DPI 初始化、窗口类注册、窗口创建、绘制和消息循环。
+  负责进程启动、DPI 初始化、窗口类注册、窗口创建、状态轮询、绘制和消息循环。
+- `src/agent_state.rs`
+  负责 hook 状态 schema、Win32 named mutex、原子 JSON 写入、TTL/stale 和 summary 聚合。
+- `src/hook_rules.rs`
+  负责 hook name 映射、Stop waiting heuristic、payload 字段提取和 payload shape 采样。
+- `src/bin/taskbar_widget_hook.rs`
+  负责 hook CLI、stdin/argv 解码、调用规则层、状态写入和 debug `set/clear/list`。
 - `src/taskbar.rs`
   负责任务栏探测、attach 策略、layered 设置、定位和诊断 JSON 输出。
 - `src/win32.rs`
@@ -96,6 +109,65 @@ cargo run
 cargo fmt -- --check
 cargo check
 ```
+
+## Hook State Integration
+
+当前已增加 Claude Code / Codex hook 状态接收器：
+
+```powershell
+cargo build
+```
+
+生成的 hook CLI：
+
+```text
+target\debug\taskbar_widget_hook.exe
+```
+
+默认状态文件：
+
+```text
+%APPDATA%\CcTrafficLight\state.json
+```
+
+验证时建议用隔离目录：
+
+```powershell
+$env:TASKBAR_WIDGET_STATE_HOME = Join-Path $env:TEMP "cc-traffic-light-hook-test"
+```
+
+人工 hook 示例：
+
+```powershell
+'{"hook_event_name":"UserPromptSubmit","session_id":"123","event_order":100}' | .\target\debug\taskbar_widget_hook.exe codex UserPromptSubmit
+'{"hook_event_name":"PermissionRequest","session_id":"546","event_order":200}' | .\target\debug\taskbar_widget_hook.exe claude PermissionRequest
+.\target\debug\taskbar_widget_hook.exe list
+```
+
+debug CLI：
+
+```powershell
+.\target\debug\taskbar_widget_hook.exe set codex_123 working
+.\target\debug\taskbar_widget_hook.exe clear codex_123
+.\target\debug\taskbar_widget_hook.exe list
+```
+
+采样模式只输出 payload shape，不保存完整 payload：
+
+```powershell
+'{"hook_event_name":"UserPromptSubmit","session_id":"123"}' | .\target\debug\taskbar_widget_hook.exe sample
+```
+
+状态 schema 提前支持多个 task：`tasks`、`global_summary`、`agents.codex.summary`、`agents.claude.summary`。MVP widget 只消费 `global_summary`，并通过 1000ms Win32 timer 在状态变化时重绘。
+
+当前显示的是“最近 hook 状态聚合”，不是 agent 在线检测结果。Rust MVP 不做进程检测；如果没有新的 hook 事件，显示状态只代表状态文件里的最新 task snapshot 和 TTL/stale 聚合。
+
+示例配置片段：
+
+- [examples.codex-hooks.toml](/D:/project/cc-traffic-light/taskbar-widget/examples.codex-hooks.toml)
+- [examples.claude-hooks.json](/D:/project/cc-traffic-light/taskbar-widget/examples.claude-hooks.json)
+
+注意：本项目不自动修改用户外部 Claude Code / Codex 配置。Codex `notify` 已按 [codex-notify-probe.md](/D:/project/cc-traffic-light/docs/checklist/codex-notify-probe.md) 验证为低保真兼容通知，不进入主状态路径。Codex 主状态来源应验证正式 lifecycle hooks，见 [codex-lifecycle-hooks-validation.md](/D:/project/cc-traffic-light/docs/checklist/codex-lifecycle-hooks-validation.md)；`examples.codex-hooks.toml` 使用官方 inline TOML 结构，但仍需要在本机完成 hook trust 和真实 payload 采样。
 
 ## Diagnostics
 
@@ -146,13 +218,17 @@ taskbar-widget/target/diagnose-taskbar-loop/
 
 ## Dependencies
 
-当前核心依赖只有一个：
+当前核心依赖：
 
 ```toml
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
+  "Win32_Security",
   "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
   "Win32_UI_HiDpi",
   "Win32_UI_WindowsAndMessaging",
 ] }
@@ -173,6 +249,10 @@ windows = { version = "0.58", features = [
 - `DrawTextW`
 - `GetMessageW`
 - `DispatchMessageW`
+- `CreateMutexW`
+- `WaitForSingleObject`
+- `SetTimer`
+- `InvalidateRect`
 
 ## Limitations
 
@@ -180,12 +260,14 @@ windows = { version = "0.58", features = [
 
 - 仅支持当前主力 Win11 路径
 - 仅支持主任务栏
-- 仅显示固定文本 `TASKBAR WIDGET`
+- MVP 只显示聚合后的 hook 状态，不显示 task 列表
 - 不处理 Explorer 重启恢复
 - 不处理多显示器
 - 不处理透明背景融合
 - 不处理 D2D / DirectComposition 渲染
 - 不处理主题、设置、插件系统
+- 不自动安装或修改 Claude Code / Codex 外部配置
+- 不保存完整 hook payload
 
 ## Related Docs
 
@@ -195,6 +277,11 @@ windows = { version = "0.58", features = [
 - [../docs/checklist/win11-taskbar-runtime-map.md](../docs/checklist/win11-taskbar-runtime-map.md)
 - [../docs/checklist/win11-taskbar-widget-checklist.md](../docs/checklist/win11-taskbar-widget-checklist.md)
 - [../docs/checklist/win11-taskbar-visibility-replan-checklist.md](../docs/checklist/win11-taskbar-visibility-replan-checklist.md)
+- [../docs/checklist/hook-integration-checklist.md](../docs/checklist/hook-integration-checklist.md)
+- [../docs/checklist/hook-integration-validation.md](../docs/checklist/hook-integration-validation.md)
+- [../docs/checklist/hook-adjustment-checklist.md](../docs/checklist/hook-adjustment-checklist.md)
+- [../docs/checklist/codex-notify-probe.md](../docs/checklist/codex-notify-probe.md)
+- [../docs/checklist/codex-lifecycle-hooks-validation.md](../docs/checklist/codex-lifecycle-hooks-validation.md)
 
 ## Deferred Next Steps
 

@@ -1,0 +1,6 @@
+- Task: Codex notify config helper support for HCA-A-GATE and HCA-VAL-11
+- Encountered Problem: 真实 notify 探针需要临时修改 `C:\Users\admin\.codex\config.toml`，但 checklist policy 禁止自动修改外部配置。
+- Thought Process: 可以提供一个默认 dry-run 的仓库内辅助脚本，让后续安装/恢复步骤可审阅、可回滚、显式执行，同时不在当前回合写入真实 config。
+- Options Considered: 继续只给手工步骤；直接请求修改真实 config；新增 dry-run/apply/restore 脚本并先用临时 config 自测。
+- Chosen Solution: 新增 `taskbar-widget/scripts/codex-notify-probe-config.ps1`，默认只读取并输出脱敏摘要，`-Apply` 才备份并安装 wrapper notify，`-Restore -Apply` 才恢复备份。
+- Rationale: 临时 config 已验证 dry-run/apply/restore；真实 config dry-run 已验证可读取当前 notify 且未写入。真实探针仍等待用户确认后执行。

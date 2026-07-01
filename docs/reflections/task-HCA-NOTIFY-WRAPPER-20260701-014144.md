@@ -1,0 +1,6 @@
+- Task: Codex notify wrapper self-test support for HCA-VAL-11
+- Encountered Problem: 真实 Codex notify 探针需要用户确认外部配置操作，但仓库内仍缺少可审阅、可自测的 wrapper 产物。
+- Thought Process: 在不修改 `C:\Users\admin\.codex\config.toml` 的前提下，可以先实现 wrapper 脚本并用 fake 原 notify 验证 shape 记录和转发语义，降低后续人工接入风险。
+- Options Considered: 继续只保留文档；直接修改 Codex 配置执行真实探针；新增 wrapper 脚本并用 fake notify 自测。
+- Chosen Solution: 新增 `taskbar-widget/scripts/codex-notify-probe-wrapper.ps1`，使用 `-ForwardJsonBase64` 传入原 notify 命令数组，只记录脱敏 shape，并转发 stdin/stdout/stderr/exit code。
+- Rationale: 自测已证明 wrapper 能生成脱敏 probe JSON、识别 session candidate path、保留原 notify 参数 shape 并转发原命令；真实 Codex notify 仍等待用户确认后执行。

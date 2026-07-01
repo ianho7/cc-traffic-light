@@ -1,0 +1,41 @@
+{
+  "_comment": "Example only. Do not paste blindly without checking the current Claude Code hook schema.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude UserPromptSubmit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PreToolUse"
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PermissionRequest"
+      }
+    ],
+    "Notification": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude Notification"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude Stop"
+      }
+    ],
+    "StopFailure": [
+      {
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude StopFailure"
+      }
+    ]
+  }
+}
