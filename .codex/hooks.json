@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SessionStart",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SessionStart",
-            "statusMessage": "Dumping Codex SessionStart hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
+            "statusMessage": "Writing Codex SessionStart state"
           }
         ]
       }
@@ -18,9 +18,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName UserPromptSubmit",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName UserPromptSubmit",
-            "statusMessage": "Dumping Codex UserPromptSubmit hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
+            "statusMessage": "Writing Codex UserPromptSubmit state"
           }
         ]
       }
@@ -31,9 +31,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PreToolUse",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PreToolUse",
-            "statusMessage": "Dumping Codex PreToolUse hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
+            "statusMessage": "Writing Codex PreToolUse state"
           }
         ]
       }
@@ -44,9 +44,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PermissionRequest",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PermissionRequest",
-            "statusMessage": "Dumping Codex PermissionRequest hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
+            "statusMessage": "Writing Codex PermissionRequest state"
           }
         ]
       }
@@ -57,9 +57,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PostToolUse",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName PostToolUse",
-            "statusMessage": "Dumping Codex PostToolUse hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
+            "statusMessage": "Writing Codex PostToolUse state"
           }
         ]
       }
@@ -70,9 +70,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SubagentStop",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName SubagentStop",
-            "statusMessage": "Dumping Codex SubagentStop hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
+            "statusMessage": "Writing Codex SubagentStop state"
           }
         ]
       }
@@ -82,9 +82,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName Stop",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\codex-lifecycle-hook-dump.ps1\" -EventName Stop",
-            "statusMessage": "Dumping Codex Stop hook shape"
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex Stop",
+            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex Stop",
+            "statusMessage": "Writing Codex Stop state"
           }
         ]
       }

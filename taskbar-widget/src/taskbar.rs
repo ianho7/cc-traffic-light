@@ -38,7 +38,7 @@ impl ParentStrategy {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::ShellTray => "shell",
@@ -67,7 +67,7 @@ impl AnchorStrategy {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::TrayNotify => "tray_notify",
             Self::TaskSwitch => "task_switch",
@@ -91,7 +91,7 @@ impl CoordinateMode {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::RectDelta => "rect_delta",
             Self::ScreenToClient => "screen_to_client",
@@ -120,7 +120,7 @@ impl StyleMode {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Child => "child",
             Self::PopupParented => "popup_parented",
@@ -145,7 +145,7 @@ impl RefreshMode {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Redraw => "redraw",
@@ -169,7 +169,7 @@ impl LayeredMode {
         }
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
             Self::Opaque => "opaque",
@@ -502,7 +502,7 @@ pub fn attach_to_taskbar(
         parent_relation_verified
     };
 
-    TaskbarAttachResult {
+    let result = TaskbarAttachResult {
         attempted: true,
         target_parent: probe.host_parent,
         previous_parent,
@@ -520,7 +520,25 @@ pub fn attach_to_taskbar(
         set_parent_succeeded,
         residual_top_level_style_bits,
         top_level_style_cleared,
+    };
+
+    if win32::runtime_log_enabled() {
+        win32::runtime_debug_log(&format!(
+            "{} attach target_parent={} previous_parent={} current_parent={} api_ok={} verified={} layered_ok={} style_mode={} layered_mode={} residual_top_level_style_bits=0x{:X}",
+            win32::LIVE_DEBUG_PREFIX,
+            win32::format_hwnd(result.target_parent),
+            win32::format_hwnd(result.previous_parent),
+            win32::format_hwnd(result.current_parent),
+            result.set_parent_api_ok,
+            result.parent_relation_verified,
+            result.layered_ok,
+            config.style_mode.as_str(),
+            config.layered_mode.as_str(),
+            result.residual_top_level_style_bits
+        ));
     }
+
+    result
 }
 
 pub fn log_attach(result: &TaskbarAttachResult) {
@@ -629,7 +647,7 @@ pub fn position_in_taskbar(
         bottom: parent_rect.top + y + height,
     });
 
-    TaskbarLayoutResult {
+    let result = TaskbarLayoutResult {
         attempted: true,
         anchor,
         parent_rect,
@@ -641,7 +659,24 @@ pub fn position_in_taskbar(
         y,
         width,
         height,
+    };
+
+    if win32::runtime_log_enabled() {
+        win32::runtime_debug_log(&format!(
+            "{} layout anchor={} parent_rect={} module_rect={} move_args=({}, {}, {}, {}) moved={}",
+            win32::LIVE_DEBUG_PREFIX,
+            win32::format_hwnd(result.anchor),
+            win32::format_rect(&result.parent_rect),
+            win32::format_rect(&result.module_rect),
+            result.x,
+            result.y,
+            result.width,
+            result.height,
+            result.moved
+        ));
     }
+
+    result
 }
 
 pub fn log_layout(result: &TaskbarLayoutResult) {
@@ -667,7 +702,25 @@ pub fn log_layout(result: &TaskbarLayoutResult) {
 
 pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &DebugLoopConfig) {
     if !layout.attempted || !is_valid_window(hwnd) {
+        if win32::runtime_log_enabled() {
+            win32::runtime_debug_log(&format!(
+                "{} refresh skipped attempted={} hwnd_valid={}",
+                win32::LIVE_DEBUG_PREFIX,
+                layout.attempted,
+                is_valid_window(hwnd)
+            ));
+        }
         return;
+    }
+
+    if win32::runtime_log_enabled() {
+        win32::runtime_debug_log(&format!(
+            "{} refresh start mode={} hwnd={} module_rect={}",
+            win32::LIVE_DEBUG_PREFIX,
+            config.refresh_mode.as_str(),
+            win32::format_hwnd(hwnd),
+            win32::format_rect(&layout.module_rect)
+        ));
     }
 
     match config.refresh_mode {
@@ -683,6 +736,16 @@ pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &Deb
                     "[taskbar-loop] refresh redraw attempt={} moved={} invalidated={} updated={}",
                     attempt, moved, invalidated, updated
                 ));
+                if win32::runtime_log_enabled() {
+                    win32::runtime_debug_log(&format!(
+                        "{} refresh redraw attempt={} moved={} invalidated={} updated={}",
+                        win32::LIVE_DEBUG_PREFIX,
+                        attempt,
+                        moved,
+                        invalidated,
+                        updated
+                    ));
+                }
                 if attempt < 3 {
                     thread::sleep(Duration::from_millis(500));
                 }
@@ -708,6 +771,16 @@ pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &Deb
                     "[taskbar-loop] refresh topmost_pulse attempt={} positioned={} invalidated={} updated={}",
                     attempt, positioned, invalidated, updated
                 ));
+                if win32::runtime_log_enabled() {
+                    win32::runtime_debug_log(&format!(
+                        "{} refresh topmost_pulse attempt={} positioned={} invalidated={} updated={}",
+                        win32::LIVE_DEBUG_PREFIX,
+                        attempt,
+                        positioned,
+                        invalidated,
+                        updated
+                    ));
+                }
                 if attempt < 3 {
                     thread::sleep(Duration::from_millis(500));
                 }

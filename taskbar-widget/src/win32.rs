@@ -1,3 +1,12 @@
+use std::{
+    env,
+    fs::{self, OpenOptions},
+    io::Write,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
 use windows::Win32::{
     Foundation::{HWND, RECT, SetLastError, WIN32_ERROR},
     UI::{
@@ -12,8 +21,38 @@ use windows::Win32::{
     },
 };
 
+pub const LIVE_DEBUG_PREFIX: &str = "[DEBUG-LIVE-01]";
+pub const RUNTIME_LOG_ENV: &str = "TASKBAR_MVP_RUNTIME_LOG_FILE";
+
+static RUNTIME_LOG_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+static RUNTIME_LOG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
 pub fn debug_log(message: &str) {
     println!("[taskbar-mvp] {message}");
+}
+
+pub fn init_runtime_log() {
+    let Some(path) = runtime_log_path() else {
+        return;
+    };
+
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = OpenOptions::new().create(true).append(true).open(path);
+    runtime_debug_log(&format!(
+        "{LIVE_DEBUG_PREFIX} runtime log enabled path={}",
+        path.display()
+    ));
+}
+
+pub fn runtime_log_enabled() -> bool {
+    runtime_log_path().is_some()
+}
+
+pub fn runtime_debug_log(message: &str) {
+    debug_log(message);
+    append_runtime_log(message);
 }
 
 pub fn enable_per_monitor_dpi_awareness() {
@@ -124,4 +163,33 @@ pub fn log_window(label: &str, hwnd: HWND) {
             format_hwnd(hwnd)
         )),
     }
+}
+
+fn runtime_log_path() -> Option<&'static PathBuf> {
+    RUNTIME_LOG_PATH
+        .get_or_init(|| env::var_os(RUNTIME_LOG_ENV).map(PathBuf::from))
+        .as_ref()
+}
+
+fn append_runtime_log(message: &str) {
+    let Some(path) = runtime_log_path() else {
+        return;
+    };
+    let lock = RUNTIME_LOG_LOCK.get_or_init(|| Mutex::new(()));
+    let Ok(_guard) = lock.lock() else {
+        return;
+    };
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+
+    let _ = writeln!(file, "{} {}", timestamp_ms(), message);
+}
+
+fn timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0))
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
 }

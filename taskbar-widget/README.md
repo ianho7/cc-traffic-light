@@ -136,6 +136,12 @@ target\debug\taskbar_widget_hook.exe
 $env:TASKBAR_WIDGET_STATE_HOME = Join-Path $env:TEMP "cc-traffic-light-hook-test"
 ```
 
+运行期诊断日志可额外写到文件：
+
+```powershell
+$env:TASKBAR_MVP_RUNTIME_LOG_FILE = Join-Path $env:TEMP "cc-traffic-light-runtime.log"
+```
+
 人工 hook 示例：
 
 ```powershell
@@ -169,6 +175,8 @@ debug CLI：
 
 注意：本项目不自动修改用户外部 Claude Code / Codex 配置。Codex `notify` 已按 [codex-notify-probe.md](/D:/project/cc-traffic-light/docs/checklist/codex-notify-probe.md) 验证为低保真兼容通知，不进入主状态路径。Codex 主状态来源应验证正式 lifecycle hooks，见 [codex-lifecycle-hooks-validation.md](/D:/project/cc-traffic-light/docs/checklist/codex-lifecycle-hooks-validation.md)；`examples.codex-hooks.toml` 使用官方 inline TOML 结构，但仍需要在本机完成 hook trust 和真实 payload 采样。
 
+当前项目级 `.codex/hooks.json` 默认已切到 `taskbar_widget_hook.exe codex <HookName>` 的真实状态写入路径；原 `scripts/codex-lifecycle-hook-dump.ps1` 仍保留，供后续重新采样真实 payload shape。
+
 ## Diagnostics
 
 聚焦诊断脚本：
@@ -177,10 +185,23 @@ debug CLI：
 .\scripts\diagnose-taskbar-loop.ps1 -SkipBuild -Parents shell -Anchors tray_notify -CoordModes rect_delta
 ```
 
+widget 生命周期 / live redraw 诊断脚本：
+
+```powershell
+.\scripts\diagnose-widget-liveness.ps1 -LoopType baseline -SkipBuild
+.\scripts\diagnose-widget-liveness.ps1 -LoopType fixture_replay -SkipBuild
+```
+
 诊断输出会写到：
 
 ```text
 taskbar-widget/target/diagnose-taskbar-loop/
+```
+
+以及：
+
+```text
+taskbar-widget/target/diagnose-widget-liveness/
 ```
 
 注意：

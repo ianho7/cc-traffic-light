@@ -142,6 +142,32 @@ pub struct HookEventUpdate {
     pub message: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DisplayLoadOutcome {
+    Loaded,
+    MissingFile,
+    ReadError(String),
+    InvalidJson,
+}
+
+impl DisplayLoadOutcome {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Loaded => "loaded",
+            Self::MissingFile => "missing_file",
+            Self::ReadError(_) => "read_error",
+            Self::InvalidJson => "invalid_json",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DisplayLoadResult {
+    pub state: HookMonitorState,
+    pub outcome: DisplayLoadOutcome,
+    pub path: PathBuf,
+}
+
 impl HookMonitorState {
     pub fn default_at(now_ms: u64) -> Self {
         let idle = HookSummary {
@@ -200,17 +226,43 @@ pub fn state_file_path() -> PathBuf {
 }
 
 pub fn load_state_for_display() -> HookMonitorState {
+    load_state_for_display_diagnostic().state
+}
+
+pub fn load_state_for_display_diagnostic() -> DisplayLoadResult {
     let now = now_ms();
     let path = state_file_path();
-    let Ok(text) = fs::read_to_string(&path) else {
-        return HookMonitorState::default_at(now);
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return DisplayLoadResult {
+                state: HookMonitorState::default_at(now),
+                outcome: DisplayLoadOutcome::MissingFile,
+                path,
+            };
+        }
+        Err(error) => {
+            return DisplayLoadResult {
+                state: HookMonitorState::default_at(now),
+                outcome: DisplayLoadOutcome::ReadError(error.to_string()),
+                path,
+            };
+        }
     };
     let Ok(mut state) = serde_json::from_str::<HookMonitorState>(strip_utf8_bom(&text)) else {
-        return HookMonitorState::default_at(now);
+        return DisplayLoadResult {
+            state: HookMonitorState::default_at(now),
+            outcome: DisplayLoadOutcome::InvalidJson,
+            path,
+        };
     };
 
     refresh_summaries(&mut state, now);
-    state
+    DisplayLoadResult {
+        state,
+        outcome: DisplayLoadOutcome::Loaded,
+        path,
+    }
 }
 
 pub fn update_state<F>(mutator: F) -> io::Result<HookMonitorState>
