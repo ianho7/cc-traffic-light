@@ -1,40 +1,59 @@
 {
-  "_comment": "Example only. Do not paste blindly without checking the current Claude Code hook schema.",
+  "_comment": "Example only. Verified against Claude Code v2.1.50 project-local hooks UI on 2026-07-01. Use matcher-group structure, not the older flat event handler shape.",
   "hooks": {
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude UserPromptSubmit"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude UserPromptSubmit"
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PreToolUse"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PreToolUse"
+          }
+        ]
       }
     ],
-    "PermissionRequest": [
+    "PostToolUse": [
       {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PermissionRequest"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PostToolUse"
+          }
+        ]
       }
     ],
     "Notification": [
       {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude Notification"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude Notification"
+          }
+        ]
       }
     ],
-    "Stop": [
+    "PostToolUseFailure": [
       {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude Stop"
-      }
-    ],
-    "StopFailure": [
-      {
-        "type": "command",
-        "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude StopFailure"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe claude PostToolUseFailure"
+          }
+        ]
       }
     ]
   }
