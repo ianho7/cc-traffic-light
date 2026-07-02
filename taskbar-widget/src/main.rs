@@ -13,9 +13,9 @@ use windows::{
     Win32::{
         Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::Gdi::{
-            BeginPaint, CreateSolidBrush, DT_CENTER, DT_SINGLELINE, DT_VCENTER, DeleteObject,
-            DrawTextW, EndPaint, FillRect, InvalidateRect, PAINTSTRUCT, SetBkMode, SetTextColor,
-            TRANSPARENT,
+            BeginPaint, CreatePen, CreateSolidBrush, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE,
+            DT_VCENTER, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, InvalidateRect,
+            PAINTSTRUCT, PS_NULL, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
@@ -39,6 +39,14 @@ const HOOK_STATE_TIMER_MS: u32 = 1_000;
 #[derive(Clone)]
 struct PaintState {
     summary: HookSummary,
+}
+
+struct PaintStyle {
+    label: String,
+    background: COLORREF,
+    foreground: COLORREF,
+    indicator: COLORREF,
+    stale_indicator: COLORREF,
 }
 
 static PAINT_STATE: OnceLock<Mutex<PaintState>> = OnceLock::new();
@@ -250,7 +258,10 @@ unsafe extern "system" fn window_proc(
         }
         WM_CLOSE => {
             set_runtime_stage("wm_close");
-            runtime_log(&format!("WM_CLOSE received hwnd={}", win32::format_hwnd(hwnd)));
+            runtime_log(&format!(
+                "WM_CLOSE received hwnd={}",
+                win32::format_hwnd(hwnd)
+            ));
             unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
         }
         WM_SETCURSOR => {
@@ -329,10 +340,7 @@ fn poll_hook_state(hwnd: HWND) {
             let _ = InvalidateRect(hwnd, None, true);
         }
     } else {
-        runtime_log(&format!(
-            "summary unchanged {}",
-            format_summary(&next)
-        ));
+        runtime_log(&format!("summary unchanged {}", format_summary(&next)));
     }
 }
 
@@ -345,28 +353,73 @@ fn paint_window(hwnd: HWND) -> LRESULT {
         .unwrap_or_else(|| {
             agent_state::HookMonitorState::default_at(agent_state::now_ms()).global_summary
         });
-    let (label, background, foreground) = paint_style(&summary);
-    let mut text = win32::wide_text(&label);
+    let style = paint_style(&summary);
+    let mut text = win32::wide_text(&style.label);
     runtime_log(&format!(
         "WM_PAINT enter hwnd={} label={}",
         win32::format_hwnd(hwnd),
-        label
+        style.label
     ));
 
     unsafe {
         let hdc = BeginPaint(hwnd, &mut paint);
         let _ = GetClientRect(hwnd, &mut client_rect);
 
-        let background_brush = CreateSolidBrush(background);
+        let background_brush = CreateSolidBrush(style.background);
         let _ = FillRect(hdc, &client_rect, background_brush);
+
+        // Keep the layout intentionally simple: a bright status light on the left
+        // and a short label on the right, so the widget still reads at taskbar size.
+        let indicator_rect = RECT {
+            left: client_rect.left + 12,
+            top: client_rect.top + 11,
+            right: client_rect.left + 34,
+            bottom: client_rect.top + 33,
+        };
+        let mut text_rect = RECT {
+            left: indicator_rect.right + 10,
+            top: client_rect.top,
+            right: client_rect.right - 12,
+            bottom: client_rect.bottom,
+        };
+
+        let indicator_brush = CreateSolidBrush(style.indicator);
+        let null_pen = CreatePen(PS_NULL, 0, COLORREF(0));
+        let previous_brush = SelectObject(hdc, indicator_brush);
+        let previous_pen = SelectObject(hdc, null_pen);
+        let _ = Ellipse(
+            hdc,
+            indicator_rect.left,
+            indicator_rect.top,
+            indicator_rect.right,
+            indicator_rect.bottom,
+        );
+
+        if summary.has_stale {
+            let stale_rect = RECT {
+                left: client_rect.right - 14,
+                top: client_rect.top + 8,
+                right: client_rect.right - 8,
+                bottom: client_rect.top + 14,
+            };
+            let stale_brush = CreateSolidBrush(style.stale_indicator);
+            let _ = FillRect(hdc, &stale_rect, stale_brush);
+            let _ = DeleteObject(stale_brush);
+        }
+
         let _ = SetBkMode(hdc, TRANSPARENT);
-        let _ = SetTextColor(hdc, foreground);
+        let _ = SetTextColor(hdc, style.foreground);
         let _ = DrawTextW(
             hdc,
             &mut text,
-            &mut client_rect,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+            &mut text_rect,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
         );
+
+        let _ = SelectObject(hdc, previous_pen);
+        let _ = SelectObject(hdc, previous_brush);
+        let _ = DeleteObject(null_pen);
+        let _ = DeleteObject(indicator_brush);
         let _ = DeleteObject(background_brush);
         let _ = EndPaint(hwnd, &paint);
     }
@@ -374,34 +427,35 @@ fn paint_window(hwnd: HWND) -> LRESULT {
     runtime_log(&format!(
         "WM_PAINT exit hwnd={} label={}",
         win32::format_hwnd(hwnd),
-        label
+        style.label
     ));
     LRESULT(0)
 }
 
-fn paint_style(summary: &HookSummary) -> (String, COLORREF, COLORREF) {
-    let stale = if summary.has_stale { " *" } else { "" };
+fn paint_style(summary: &HookSummary) -> PaintStyle {
     let suffix = if summary.active_task_count > 0 {
         format!(" {}", summary.active_task_count)
     } else {
         String::new()
     };
-    let label = format!(
-        "{}{}{}",
-        summary.state.as_str().to_ascii_uppercase(),
-        suffix,
-        stale
-    );
 
-    let background = match summary.state {
-        AgentState::Idle => rgb(28, 28, 28),
-        AgentState::Done => rgb(35, 112, 67),
-        AgentState::Working => rgb(35, 86, 150),
-        AgentState::Waiting => rgb(170, 119, 25),
-        AgentState::Error => rgb(155, 45, 38),
+    let (state_label, indicator, background) = match summary.state {
+        AgentState::Idle => ("IDLE", rgb(126, 138, 150), rgb(32, 37, 44)),
+        AgentState::Done => ("DONE", rgb(92, 220, 128), rgb(27, 68, 44)),
+        AgentState::Working => ("RUN", rgb(82, 180, 255), rgb(26, 60, 101)),
+        AgentState::Waiting => ("WAIT", rgb(255, 205, 74), rgb(103, 74, 23)),
+        AgentState::Error => ("ERR", rgb(255, 120, 104), rgb(108, 37, 32)),
     };
 
-    (label, background, rgb(244, 244, 244))
+    let stale = if summary.has_stale { " !" } else { "" };
+
+    PaintStyle {
+        label: format!("{state_label}{suffix}{stale}"),
+        background,
+        foreground: rgb(244, 244, 244),
+        indicator,
+        stale_indicator: rgb(255, 205, 74),
+    }
 }
 
 fn rgb(red: u8, green: u8, blue: u8) -> COLORREF {

@@ -38,18 +38,18 @@ pub fn extract_event_order(payload: &Value) -> Option<u64> {
     find_u64_value(payload, EVENT_ORDER_KEYS)
 }
 
-pub fn infer_state(hook_name: &str, previous: Option<&AgentState>, payload: &Value) -> AgentState {
+pub fn infer_state(hook_name: &str, _previous: Option<&AgentState>, payload: &Value) -> AgentState {
     let text = collect_text_for_heuristics(payload);
     match hook_name.to_ascii_lowercase().as_str() {
         "sessionstart" => AgentState::Idle,
         "userpromptsubmit" | "pretooluse" | "posttooluse" | "precompact" | "postcompact"
         | "subagentstart" => AgentState::Working,
         "permissionrequest" | "notification" => AgentState::Waiting,
-        "stopfailure" => AgentState::Error,
+        "stopfailure" | "posttoolusefailure" | "toolusefailure" => AgentState::Error,
         "subagentstop" => AgentState::Done,
         "stop" => {
-            if previous == Some(&AgentState::Waiting) || looks_waiting(&text) {
-                AgentState::Waiting
+            if looks_error(&text) {
+                AgentState::Error
             } else {
                 AgentState::Done
             }
@@ -58,18 +58,29 @@ pub fn infer_state(hook_name: &str, previous: Option<&AgentState>, payload: &Val
     }
 }
 
-fn looks_waiting(text: &str) -> bool {
+fn looks_error(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     [
-        "permission",
-        "approve",
-        "confirm",
-        "waiting",
-        "input",
-        "需要",
-        "确认",
-        "等待",
-        "批准",
+        "error",
+        "failed",
+        "failure",
+        "cannot",
+        "can't",
+        "unable",
+        "not found",
+        "does not exist",
+        "no such file",
+        "permission denied",
+        "denied",
+        "refused",
+        "timed out",
+        "exception",
+        "不存在",
+        "未找到",
+        "失败",
+        "无法",
+        "错误",
+        "拒绝",
     ]
     .iter()
     .any(|needle| lower.contains(needle))

@@ -33,6 +33,7 @@ fn run() -> Result<String, String> {
         "sample" => sample_payload(),
         "set" => debug_set(&args),
         "clear" => debug_clear(&args),
+        "clear-all" => debug_clear_all(&args),
         "list" => debug_list(),
         _ => handle_hook(&args),
     }
@@ -62,6 +63,17 @@ fn debug_clear(args: &[String]) -> Result<String, String> {
         return Err("usage: taskbar_widget_hook clear <task_key>".to_string());
     }
     let state = agent_state::debug_clear_task(&args[1]).map_err(|error| error.to_string())?;
+    serde_json::to_string_pretty(&state).map_err(|error| error.to_string())
+}
+
+fn debug_clear_all(args: &[String]) -> Result<String, String> {
+    if args.len() != 1 {
+        return Err("usage: taskbar_widget_hook clear-all".to_string());
+    }
+    let state = agent_state::update_state(|state| {
+        state.tasks.clear();
+    })
+    .map_err(|error| error.to_string())?;
     serde_json::to_string_pretty(&state).map_err(|error| error.to_string())
 }
 
@@ -165,7 +177,7 @@ fn parse_json_input(input: &str, allow_empty: bool) -> Result<Value, String> {
 
 fn usage() -> String {
     format!(
-        "usage: taskbar_widget_hook <codex|claude> <HookName> | sample | set <task_key> <state> | clear <task_key> | list (pid={})",
+        "usage: taskbar_widget_hook <codex|claude> <HookName> | sample | set <task_key> <state> | clear <task_key> | clear-all | list (pid={})",
         process::id()
     )
 }
