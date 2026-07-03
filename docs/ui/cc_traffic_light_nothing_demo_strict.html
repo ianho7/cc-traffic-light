@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CC Traffic Light · Strict Nothing Demo</title>
+  <style>
+    :root {
+      --bg-app: #f4f1ea;
+      --bg-panel: #fbfaf6;
+      --bg-soft: #f7f4ed;
+      --text-main: #111111;
+      --text-sub: #606060;
+      --text-muted: #8b8b8b;
+      --border: #d8d2c6;
+      --border-soft: #e6e0d5;
+      --black: #111111;
+      --white: #ffffff;
+      --ok: #3ba55d;
+      --warn: #d6a439;
+      --error: #d64a3a;
+      --idle: #989898;
+      --font-ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+      --font-mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+      --r-lg: 16px;
+      --r-md: 12px;
+      --r-sm: 8px;
+      --motion: 140ms ease;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      color: var(--text-main);
+      background: var(--bg-app);
+      overflow: hidden;
+    }
+
+    .window {
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg-app);
+      display: grid;
+      grid-template-rows: 37px 1fr;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px 0 10px;
+      background: #eff7fc;
+      border: 1px solid #c9d6df;
+      border-bottom: 0;
+      font-size: 14px;
+      user-select: none;
+    }
+
+    .title-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .app-icon {
+      width: 18px;
+      height: 18px;
+      border: 1px solid #9aaab4;
+      background:
+        linear-gradient(90deg, #ffffff 0 35%, #95c8a7 35% 70%, #111 70% 100%);
+      box-shadow: inset 0 0 0 2px #eef6fb;
+    }
+
+    .win-buttons {
+      display: flex;
+      gap: 30px;
+      color: #111;
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    .win-buttons span {
+      opacity: .9;
+    }
+
+    .app {
+      padding: 31px;
+      display: grid;
+      grid-template-columns: 275px minmax(0, 1fr);
+      gap: 30px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .sidebar,
+    .main-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+    }
+
+    .sidebar {
+      padding: 28px 28px 30px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .brand-kicker {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-sub);
+      margin-bottom: 12px;
+    }
+
+    .brand-title {
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -1.6px;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .brand-desc {
+      margin: 14px 0 58px;
+      color: var(--text-sub);
+      font-size: 18px;
+      line-height: 1.15;
+    }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .nav button {
+      width: 100%;
+      height: 76px;
+      border: 1.5px solid var(--black);
+      border-radius: var(--r-md);
+      background: transparent;
+      color: var(--text-main);
+      font: inherit;
+      padding: 0 22px;
+      text-align: left;
+      cursor: pointer;
+      transition: background var(--motion), color var(--motion), transform var(--motion);
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      align-items: center;
+      column-gap: 4px;
+    }
+
+    .nav button:hover {
+      transform: translateY(-1px);
+    }
+
+    .nav button.active {
+      background: var(--black);
+      color: var(--white);
+    }
+
+    .nav-index {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: .06em;
+      opacity: .56;
+    }
+
+    .nav-name {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+
+    .nav-label {
+      grid-column: 2;
+      margin-top: -17px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .12em;
+      color: var(--text-muted);
+    }
+
+    .nav button.active .nav-label {
+      color: #cfcfcf;
+    }
+
+    .main-panel {
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page {
+      display: none;
+      height: 100%;
+      overflow: auto;
+      padding: 31px 30px;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .page-head {
+      margin-bottom: 20px;
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: 31px;
+      line-height: 1;
+      font-weight: 500;
+      letter-spacing: -.06em;
+    }
+
+    .page-desc {
+      margin: 16px 0 0;
+      color: var(--text-sub);
+      font-size: 16px;
+      line-height: 1.45;
+      max-width: 900px;
+    }
+
+    .grid-overview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px 20px;
+    }
+
+    .wide {
+      grid-column: span 1;
+    }
+
+    .card {
+      min-height: 185px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      background: rgba(255, 255, 255, .26);
+      padding: 29px 29px 27px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.large {
+      min-height: 342px;
+    }
+
+    .card.compact {
+      min-height: 342px;
+    }
+
+    .card-kicker {
+      font-size: 13px;
+      letter-spacing: .13em;
+      color: var(--text-sub);
+      font-weight: 900;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 54px;
+      line-height: .98;
+      font-weight: 850;
+      letter-spacing: -.08em;
+    }
+
+    .card-title.small {
+      font-size: 45px;
+    }
+
+    .card-title.ok {
+      color: var(--ok);
+    }
+
+    .card-title.warn {
+      color: var(--warn);
+    }
+
+    .card-title.idle {
+      color: var(--warn);
+    }
+
+    .card-foot {
+      position: absolute;
+      left: 29px;
+      right: 29px;
+      bottom: 28px;
+      color: var(--text-sub);
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      overflow: hidden;
+      background: rgba(255, 255, 255, .23);
+      margin-bottom: 22px;
+    }
+
+    .section-head {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .section-title {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: .14em;
+      font-weight: 900;
+      color: var(--text-sub);
+      text-transform: uppercase;
+    }
+
+    .section-note {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .row {
+      min-height: 69px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+      padding: 13px 20px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .row-title {
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -.02em;
+    }
+
+    .row-key {
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .row-value {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-self: end;
+      min-width: 120px;
+      justify-content: flex-end;
+      color: var(--text-main);
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .toggle {
+      border: 1.5px solid var(--black);
+      background: transparent;
+      border-radius: 999px;
+      height: 34px;
+      min-width: 94px;
+      padding: 0 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      transition: background var(--motion), color var(--motion);
+      color: var(--black);
+    }
+
+    .toggle .lamp {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--black);
+      background: transparent;
+    }
+
+    .toggle.on {
+      background: var(--black);
+      color: var(--white);
+    }
+
+    .toggle.on .lamp {
+      background: var(--ok);
+      border-color: var(--ok);
+    }
+
+    .value-pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 13px;
+      min-width: 88px;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-main);
+      background: rgba(255, 255, 255, .35);
+    }
+
+    .cycle {
+      cursor: pointer;
+      border-color: var(--black);
+    }
+
+    .signal-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: .04em;
+      color: var(--text-sub);
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      border: 1.5px solid currentColor;
+      display: inline-block;
+    }
+
+    .dot.ok {
+      background: var(--ok);
+      border-color: var(--ok);
+    }
+
+    .dot.warn {
+      background: var(--warn);
+      border-color: var(--warn);
+    }
+
+    .dot.idle {
+      background: transparent;
+      border-color: var(--idle);
+    }
+
+    .dot.error {
+      background: var(--error);
+      border-color: var(--error);
+    }
+
+    .diagnostics {
+      font-family: var(--font-mono);
+      color: var(--text-sub);
+      font-size: 13px;
+      line-height: 1.65;
+      word-break: break-all;
+    }
+
+    .diagnostic-summary {
+      font-size: 18px;
+      color: var(--text-main);
+      margin: 0 0 15px;
+    }
+
+    .refresh-row {
+      margin-top: 460px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .refresh-btn {
+      min-width: 195px;
+      height: 56px;
+      border-radius: 999px;
+      border: 1.5px solid var(--black);
+      background: transparent;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background var(--motion), color var(--motion), transform var(--motion);
+    }
+
+    .refresh-btn:hover {
+      background: var(--black);
+      color: var(--white);
+      transform: translateY(-1px);
+    }
+
+    .device-table .row {
+      grid-template-columns: 180px 1fr;
+    }
+
+    .device-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: .1em;
+      color: var(--text-sub);
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .device-value {
+      font-size: 17px;
+      word-break: break-all;
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .window {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        overflow: visible;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .brand-desc {
+        margin-bottom: 24px;
+      }
+
+      .grid-overview {
+        grid-template-columns: 1fr;
+      }
+
+      .refresh-row {
+        margin-top: 180px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="title-left"><span class="app-icon"></span><span>CC Traffic Light</span></div>
+      <div class="win-buttons"><span>−</span><span>□</span><span>×</span></div>
+    </div>
+
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand-kicker">设置</div>
+        <h1 class="brand-title">信号控制台</h1>
+        <p class="brand-desc">Win32 运行时继续保持原生，Slint 只接管这个设置界面。</p>
+
+        <nav class="nav" aria-label="页面导航">
+          <button class="active" data-page="overview"><span class="nav-index">01</span><span
+              class="nav-name">总览</span><span class="nav-label">OVERVIEW</span></button>
+          <button data-page="general"><span class="nav-index">02</span><span class="nav-name">通用</span><span
+              class="nav-label">GENERAL</span></button>
+          <button data-page="sources"><span class="nav-index">03</span><span class="nav-name">监听</span><span
+              class="nav-label">SOURCES</span></button>
+          <button data-page="appearance"><span class="nav-index">04</span><span class="nav-name">外观</span><span
+              class="nav-label">APPEARANCE</span></button>
+          <button data-page="diagnostics"><span class="nav-index">05</span><span class="nav-name">诊断</span><span
+              class="nav-label">DIAGNOSTICS</span></button>
+          <button data-page="about"><span class="nav-index">06</span><span class="nav-name">关于</span><span
+              class="nav-label">ABOUT</span></button>
+        </nav>
+      </aside>
+
+      <main class="main-panel">
+        <section class="page active" id="overview">
+          <div class="grid-overview">
+            <article class="card">
+              <div class="card-kicker">整体状态</div>
+              <h2 class="card-title">待处理</h2>
+              <div class="card-foot">Codex 待处理 | Claude 空闲</div>
+            </article>
+
+            <article class="card">
+              <div class="card-kicker">组件挂载</div>
+              <h2 class="card-title">已挂载</h2>
+              <div class="card-foot">最近挂载: <span id="mount-time">1783050830239</span></div>
+            </article>
+
+            <article class="card large">
+              <div class="card-kicker">CODEX</div>
+              <h2 class="card-title small ok">待处理</h2>
+              <div class="card-foot">
+                依据 状态文件 | 可信度 已确认 | 更新时间 <span class="overview-update">1783050854279</span> |<br>
+                <span class="mono">codex_019f20fc-22c8-7181-819a-c101fbe6aa3c</span>
+              </div>
+            </article>
+
+            <article class="card compact">
+              <div class="card-kicker">CLAUDE</div>
+              <h2 class="card-title small idle">空闲</h2>
+              <div class="card-foot">
+                依据 状态文件 | 可信度 降级 | 更新时间 <span class="overview-update">1783050854279</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="general">
+          <div class="page-head">
+            <h2 class="page-title">通用</h2>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <div class="section-title">SYSTEM BEHAVIOR</div>
+              <div class="section-note">仅保留原界面已有设置项</div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">登录时启动</div>
+                <div class="row-key">START_ON_LOGIN</div>
+              </div>
+              <div class="row-value"><button class="toggle" data-setting="startLogin"><span>OFF</span><i
+                    class="lamp"></i></button></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">启动时最小化到托盘</div>
+                <div class="row-key">MINIMIZE_TO_TRAY_ON_START</div>
+              </div>
+              <div class="row-value"><button class="toggle on" data-setting="minTray"><span>ON</span><i
+                    class="lamp"></i></button></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">关闭窗口时仅缩到托盘</div>
+                <div class="row-key">CLOSE_TO_TRAY_ONLY</div>
+              </div>
+              <div class="row-value"><button class="toggle" data-setting="closeTray"><span>OFF</span><i
+                    class="lamp"></i></button></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">语言</div>
+                <div class="row-key">LANGUAGE</div>
+              </div>
+              <div class="row-value"><span class="value-pill cycle" data-cycle="language">跟随系统</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="sources">
+          <div class="page-head">
+            <h2 class="page-title">监听</h2>
+            <p class="page-desc">选择哪些本地来源参与交通灯状态判断。关闭后的来源仍会显示为未接入。</p>
+          </div>
+
+          <div class="section">
+            <div class="row">
+              <div>
+                <div class="row-title">监听 Codex</div>
+                <div class="row-key">CODEX_SOURCE</div>
+              </div>
+              <div class="row-value"><button class="toggle on" data-setting="listenCodex"><span>ON</span><i
+                    class="lamp"></i></button></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">监听 Claude Code</div>
+                <div class="row-key">CLAUDE_CODE_SOURCE</div>
+              </div>
+              <div class="row-value"><button class="toggle on" data-setting="listenClaude"><span>ON</span><i
+                    class="lamp"></i></button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="appearance">
+          <div class="page-head">
+            <h2 class="page-title">外观</h2>
+            <p class="page-desc">这些设置只影响本地显示层，不会修改外部工具或 hook 负载。</p>
+          </div>
+
+          <div class="section">
+            <div class="row">
+              <div>
+                <div class="row-title">界面主题</div>
+                <div class="row-key">THEME_MODE</div>
+              </div>
+              <div class="row-value"><span class="value-pill">浅色</span></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">指示器样式</div>
+                <div class="row-key">INDICATOR_STYLE</div>
+              </div>
+              <div class="row-value"><span class="value-pill">经典</span></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">组件尺寸</div>
+                <div class="row-key">COMPONENT_SIZE</div>
+              </div>
+              <div class="row-value"><span class="value-pill">标准</span></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">显示标签</div>
+                <div class="row-key">SHOW_LABELS</div>
+              </div>
+              <div class="row-value"><button class="toggle on" data-setting="showLabels"><span>ON</span><i
+                    class="lamp"></i></button></div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="row-title">减少动效</div>
+                <div class="row-key">REDUCE_MOTION</div>
+              </div>
+              <div class="row-value"><button class="toggle" data-setting="reduceMotion"><span>OFF</span><i
+                    class="lamp"></i></button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="diagnostics">
+          <div class="page-head">
+            <h2 class="page-title">诊断</h2>
+            <p class="page-desc">只读显示检测依据，并支持手动刷新。</p>
+          </div>
+
+          <p class="diagnostic-summary">最近刷新: <span id="latest-refresh">1783050873290</span></p>
+          <p class="diagnostic-summary" style="font-size:16px;color:var(--text-sub);">最近错误: 待定</p>
+
+          <div class="diagnostics">
+            <div>Codex | 依据 状态文件 | 可信度 已确认 | 更新时间 <span class="diag-update">1783050873290</span> |
+              codex_019f20fc-22c8-7181-819a-c101fbe6aa3c</div>
+            <div>Claude | 依据 状态文件 | 可信度 降级 | 更新时间 <span class="diag-update">1783050873290</span></div>
+          </div>
+
+          <div class="refresh-row">
+            <button class="refresh-btn" id="refreshBtn">立即刷新</button>
+          </div>
+        </section>
+
+        <section class="page" id="about">
+          <div class="page-head">
+            <h2 class="page-title">关于</h2>
+            <p class="page-desc">这是一个用 Rust、Win32 和 Slint 构建的单进程桌面工具。任务栏组件和托盘继续保持原生，这个窗口只负责设置界面。</p>
+          </div>
+
+          <div class="section device-table">
+            <div class="row">
+              <div class="device-label">版本</div>
+              <div class="device-value">0.1.0</div>
+            </div>
+            <div class="row">
+              <div class="device-label">运行时</div>
+              <div class="device-value">Win32 组件 + 托盘，Slint 设置窗口</div>
+            </div>
+            <div class="row">
+              <div class="device-label">配置路径</div>
+              <div class="device-value mono">C:\Users\admin\AppData\Roaming\CcTrafficLight\config.json</div>
+            </div>
+            <div class="row">
+              <div class="device-label">语言模式</div>
+              <div class="device-value">跟随系统</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const pages = document.querySelectorAll('.page');
+    const navButtons = document.querySelectorAll('.nav button');
+
+    navButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        navButtons.forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        pages.forEach((page) => page.classList.toggle('active', page.id === button.dataset.page));
+      });
+    });
+
+    document.querySelectorAll('.toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.classList.toggle('on');
+        button.querySelector('span').textContent = button.classList.contains('on') ? 'ON' : 'OFF';
+      });
+    });
+
+    const languageValues = ['跟随系统', '简体中文', 'English'];
+    document.querySelectorAll('[data-cycle="language"]').forEach((item) => {
+      item.addEventListener('click', () => {
+        const current = languageValues.indexOf(item.textContent.trim());
+        item.textContent = languageValues[(current + 1) % languageValues.length];
+      });
+    });
+
+    const updateTime = () => {
+      const now = Date.now().toString();
+      document.getElementById('latest-refresh').textContent = now;
+      document.querySelectorAll('.diag-update').forEach((item) => item.textContent = now);
+      document.querySelectorAll('.overview-update').forEach((item) => item.textContent = now);
+    };
+    document.getElementById('refreshBtn').addEventListener('click', updateTime);
+  </script>
+</body>
+
+</html>
