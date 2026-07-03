@@ -1,0 +1,687 @@
+export global Theme {
+    in-out property <bool> dark_mode;
+    out property <brush> window_bg: dark_mode ? #000000 : #f2efe8;
+    out property <brush> panel_bg: dark_mode ? #111111 : #fbfaf7;
+    out property <brush> panel_border: dark_mode ? #222222 : #ddd7ce;
+    out property <brush> row_border: dark_mode ? #222222 : #e0dbd3;
+    out property <brush> nav_active_bg: dark_mode ? #f4f4f4 : #111111;
+    out property <brush> nav_active_fg: dark_mode ? #000000 : #ffffff;
+    out property <brush> text_primary: dark_mode ? #ffffff : #121212;
+    out property <brush> text_secondary: dark_mode ? #e8e8e8 : #242424;
+    out property <brush> text_muted: dark_mode ? #999999 : #6b6b6b;
+    out property <brush> button_border: dark_mode ? #333333 : #1e1e1e;
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+
+    min-height: 44px;
+    border-radius: 12px;
+    background: active ? Theme.nav_active_bg : transparent;
+    border-width: active ? 0px : 1px;
+    border-color: active ? transparent : Theme.button_border;
+
+    Text {
+        x: 18px;
+        y: 0px;
+        width: parent.width - 36px;
+        height: parent.height;
+        text: label;
+        color: active ? Theme.nav_active_fg : Theme.text_muted;
+        font-family: "Space Mono";
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        horizontal-alignment: left;
+        vertical-alignment: center;
+    }
+
+}
+
+component Panel inherits Rectangle {
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    border-radius: 16px;
+    background: Theme.panel_bg;
+    border-width: 1px;
+    border-color: Theme.panel_border;
+}
+
+component DataCard inherits Panel {
+    in property <string> eyebrow;
+    in property <string> value;
+    in property <color> value_color;
+    in property <string> detail;
+
+    min-height: 172px;
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 10px;
+
+        Text {
+            text: eyebrow;
+            color: Theme.text_muted;
+            font-family: "Space Mono";
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+        }
+
+        Text {
+            text: value;
+            color: value_color;
+            font-family: "Doto";
+            font-size: 40px;
+            font-weight: 600;
+        }
+
+        Rectangle { vertical-stretch: 1; background: transparent; }
+
+        Text {
+            text: detail;
+            color: Theme.text_muted;
+            font-family: "Space Grotesk";
+            font-size: 14px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component ActionRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    min-height: 56px;
+    border-width: 1px;
+    border-color: Theme.row_border;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 18px;
+        padding-right: 18px;
+        spacing: 12px;
+        alignment: center;
+
+        Text {
+            text: label;
+            color: Theme.text_secondary;
+            font-family: "Space Grotesk";
+            font-size: 16px;
+            horizontal-stretch: 1;
+        }
+
+        Text {
+            text: value;
+            color: Theme.text_muted;
+            font-family: "Space Mono";
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            horizontal-alignment: right;
+        }
+    }
+
+}
+
+component InfoRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    min-height: 56px;
+    border-width: 1px;
+    border-color: Theme.row_border;
+    background: transparent;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+
+        Text {
+            text: label;
+            color: Theme.text_muted;
+            font-family: "Space Mono";
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+        }
+
+        Text {
+            text: value;
+            color: Theme.text_secondary;
+            font-family: "Space Grotesk";
+            font-size: 14px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component PillButton inherits Rectangle {
+    in property <string> text_value;
+
+    min-width: 156px;
+    min-height: 44px;
+    border-radius: 999px;
+    background: transparent;
+    border-width: 1px;
+    border-color: Theme.button_border;
+
+    Text {
+        width: parent.width;
+        height: parent.height;
+        text: text_value;
+        color: Theme.text_secondary;
+        font-family: "Space Mono";
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+}
+
+export component SettingsWindow inherits Window {
+    callback toggle_autostart();
+    callback toggle_start_minimized();
+    callback toggle_close_to_tray();
+    callback cycle_language();
+    callback request_refresh();
+    callback select_page(int);
+    callback toggle_monitoring_codex();
+    callback toggle_monitoring_claude();
+    callback cycle_indicator_style();
+    callback cycle_widget_size();
+    callback cycle_ui_theme();
+    callback toggle_show_labels();
+    callback toggle_reduced_motion();
+
+    in property <string> window_title;
+    in property <string> badge_text;
+    in property <string> page_title;
+    in property <string> page_subtitle;
+    in property <string> nav_overview_text;
+    in property <string> nav_general_text;
+    in property <string> nav_monitoring_text;
+    in property <string> nav_appearance_text;
+    in property <string> nav_diagnostics_text;
+    in property <string> nav_about_text;
+    in property <int> selected_page;
+    in property <string> hero_label;
+    in property <string> hero_value;
+    in property <string> hero_detail;
+    in property <string> widget_label;
+    in property <string> widget_value;
+    in property <string> widget_detail;
+    in property <string> codex_label;
+    in property <string> codex_value;
+    in property <string> codex_detail;
+    in property <string> claude_label;
+    in property <string> claude_value;
+    in property <string> claude_detail;
+    in property <string> general_title;
+    in property <string> autostart_label;
+    in property <string> autostart_value;
+    in property <string> start_minimized_label;
+    in property <string> start_minimized_value;
+    in property <string> close_to_tray_label;
+    in property <string> close_to_tray_value;
+    in property <string> language_label;
+    in property <string> language_value;
+    in property <string> monitoring_title;
+    in property <string> monitoring_hint;
+    in property <string> monitoring_codex_label;
+    in property <string> monitoring_codex_value;
+    in property <string> monitoring_claude_label;
+    in property <string> monitoring_claude_value;
+    in property <string> appearance_title;
+    in property <string> appearance_hint;
+    in property <bool> dark_mode;
+    in property <string> ui_theme_label;
+    in property <string> ui_theme_value;
+    in property <string> indicator_style_label;
+    in property <string> indicator_style_value;
+    in property <string> widget_size_label;
+    in property <string> widget_size_value;
+    in property <string> show_labels_label;
+    in property <string> show_labels_value;
+    in property <string> reduced_motion_label;
+    in property <string> reduced_motion_value;
+    in property <string> diagnostics_title;
+    in property <string> diagnostics_hint;
+    in property <string> diagnostics_button_text;
+    in property <string> diagnostics_primary;
+    in property <string> diagnostics_secondary;
+    in property <string> diagnostics_codex;
+    in property <string> diagnostics_claude;
+    in property <string> about_title;
+    in property <string> about_description;
+    in property <string> about_version_label;
+    in property <string> about_version_value;
+    in property <string> about_runtime_label;
+    in property <string> about_runtime_value;
+    in property <string> about_config_label;
+    in property <string> about_config_value;
+    in property <string> about_language_mode_label;
+    in property <string> about_language_mode_value;
+
+    title: window_title;
+    width: 1040px;
+    height: 720px;
+    background: Theme.window_bg;
+
+    HorizontalLayout {
+        padding: 24px;
+        spacing: 24px;
+
+        Panel {
+            min-width: 220px;
+            max-width: 220px;
+
+            VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+
+                Text {
+                    text: badge_text;
+                    color: Theme.text_muted;
+                    font-family: "Space Mono";
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 1.2px;
+                }
+
+                Text {
+                    text: page_title;
+                    color: Theme.text_primary;
+                    font-family: "Space Grotesk";
+                    font-size: 28px;
+                    font-weight: 500;
+                }
+
+                Text {
+                    text: page_subtitle;
+                    color: Theme.text_muted;
+                    font-family: "Space Grotesk";
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+
+                Rectangle { min-height: 8px; background: transparent; }
+
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_overview_text; active: selected_page == 0; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(0); } }
+                }
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_general_text; active: selected_page == 1; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(1); } }
+                }
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_monitoring_text; active: selected_page == 2; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(2); } }
+                }
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_appearance_text; active: selected_page == 3; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(3); } }
+                }
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_diagnostics_text; active: selected_page == 4; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(4); } }
+                }
+                Rectangle {
+                    min-height: 44px;
+                    background: transparent;
+                    NavItem { width: parent.width; height: parent.height; label: nav_about_text; active: selected_page == 5; }
+                    TouchArea { width: parent.width; height: parent.height; clicked => { root.select_page(5); } }
+                }
+
+                Rectangle { vertical-stretch: 1; background: transparent; }
+            }
+        }
+
+        Rectangle {
+            background: transparent;
+            horizontal-stretch: 1;
+            vertical-stretch: 1;
+
+            if selected_page == 0 : VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                spacing: 24px;
+
+                HorizontalLayout {
+                    spacing: 16px;
+                    DataCard {
+                        horizontal-stretch: 1;
+                        eyebrow: hero_label;
+                        value: hero_value;
+                        value_color: Theme.text_primary;
+                        detail: hero_detail;
+                    }
+                    DataCard {
+                        horizontal-stretch: 1;
+                        eyebrow: widget_label;
+                        value: widget_value;
+                        value_color: Theme.text_secondary;
+                        detail: widget_detail;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 16px;
+                    DataCard {
+                        horizontal-stretch: 1;
+                        eyebrow: codex_label;
+                        value: codex_value;
+                        value_color: #4a9e5c;
+                        detail: codex_detail;
+                    }
+                    DataCard {
+                        horizontal-stretch: 1;
+                        eyebrow: claude_label;
+                        value: claude_value;
+                        value_color: #d4a843;
+                        detail: claude_detail;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; background: transparent; }
+            }
+
+            if selected_page == 1 : Panel {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: general_title;
+                        color: Theme.text_primary;
+                        font-family: "Space Grotesk";
+                        font-size: 24px;
+                        font-weight: 500;
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: autostart_label; value: autostart_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_autostart(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: start_minimized_label; value: start_minimized_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_start_minimized(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: close_to_tray_label; value: close_to_tray_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_close_to_tray(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: language_label; value: language_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.cycle_language(); } }
+                    }
+
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                }
+            }
+
+            if selected_page == 2 : Panel {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: monitoring_title;
+                        color: Theme.text_primary;
+                        font-family: "Space Grotesk";
+                        font-size: 24px;
+                        font-weight: 500;
+                    }
+
+                    Text {
+                        text: monitoring_hint;
+                        color: Theme.text_muted;
+                        font-family: "Space Grotesk";
+                        font-size: 14px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: monitoring_codex_label; value: monitoring_codex_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_monitoring_codex(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: monitoring_claude_label; value: monitoring_claude_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_monitoring_claude(); } }
+                    }
+
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                }
+            }
+
+            if selected_page == 3 : Panel {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: appearance_title;
+                        color: Theme.text_primary;
+                        font-family: "Space Grotesk";
+                        font-size: 24px;
+                        font-weight: 500;
+                    }
+
+                    Text {
+                        text: appearance_hint;
+                        color: Theme.text_muted;
+                        font-family: "Space Grotesk";
+                        font-size: 14px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: ui_theme_label; value: ui_theme_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.cycle_ui_theme(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: indicator_style_label; value: indicator_style_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.cycle_indicator_style(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: widget_size_label; value: widget_size_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.cycle_widget_size(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: show_labels_label; value: show_labels_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_show_labels(); } }
+                    }
+                    Rectangle {
+                        width: parent.width;
+                        min-height: 56px;
+                        background: transparent;
+                        ActionRow { width: parent.width; height: parent.height; label: reduced_motion_label; value: reduced_motion_value; }
+                        TouchArea { width: parent.width; height: parent.height; clicked => { root.toggle_reduced_motion(); } }
+                    }
+
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                }
+            }
+
+            if selected_page == 4 : Panel {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: diagnostics_title;
+                        color: Theme.text_primary;
+                        font-family: "Space Grotesk";
+                        font-size: 24px;
+                        font-weight: 500;
+                    }
+
+                    Text {
+                        text: diagnostics_hint;
+                        color: Theme.text_muted;
+                        font-family: "Space Grotesk";
+                        font-size: 14px;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        text: diagnostics_primary;
+                        color: Theme.text_secondary;
+                        font-family: "Space Grotesk";
+                        font-size: 16px;
+                    }
+
+                    Text {
+                        text: diagnostics_secondary;
+                        color: Theme.text_muted;
+                        font-family: "Space Grotesk";
+                        font-size: 14px;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        text: diagnostics_codex;
+                        color: Theme.text_muted;
+                        font-family: "Space Mono";
+                        font-size: 11px;
+                        letter-spacing: 1.0px;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        text: diagnostics_claude;
+                        color: Theme.text_muted;
+                        font-family: "Space Mono";
+                        font-size: 11px;
+                        letter-spacing: 1.0px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                        Rectangle {
+                            min-width: 156px;
+                            min-height: 44px;
+                            background: transparent;
+                            PillButton { width: parent.width; height: parent.height; text_value: diagnostics_button_text; }
+                            TouchArea { width: parent.width; height: parent.height; clicked => { root.request_refresh(); } }
+                        }
+                    }
+                }
+            }
+
+            if selected_page == 5 : Panel {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: about_title;
+                        color: Theme.text_primary;
+                        font-family: "Space Grotesk";
+                        font-size: 24px;
+                        font-weight: 500;
+                    }
+
+                    Text {
+                        text: about_description;
+                        color: Theme.text_muted;
+                        font-family: "Space Grotesk";
+                        font-size: 14px;
+                        wrap: word-wrap;
+                    }
+
+                    InfoRow { width: parent.width; label: about_version_label; value: about_version_value; }
+                    InfoRow { width: parent.width; label: about_runtime_label; value: about_runtime_value; }
+                    InfoRow { width: parent.width; label: about_config_label; value: about_config_value; }
+                    InfoRow { width: parent.width; label: about_language_mode_label; value: about_language_mode_value; }
+
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                }
+            }
+        }
+    }
+}

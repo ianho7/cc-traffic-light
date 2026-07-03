@@ -2,16 +2,26 @@
 name = "taskbar-widget"
 version = "0.1.0"
 edition = "2024"
+default-run = "taskbar-widget"
+build = "build.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+slint = { version = "1.17.0", default-features = true, features = ["std", "backend-winit", "renderer-femtovg", "raw-window-handle-06"] }
+raw-window-handle = { version = "0.6", package = "raw-window-handle" }
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
   "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_LibraryLoader",
+  "Win32_System_Registry",
   "Win32_System_Threading",
   "Win32_UI_HiDpi",
+  "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+[build-dependencies]
+slint-build = "1.17.0"

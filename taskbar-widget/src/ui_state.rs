@@ -1,0 +1,173 @@
+use std::collections::BTreeMap;
+
+use crate::agent_state::AgentState;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SourceId {
+    Codex,
+    Claude,
+}
+
+impl SourceId {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::Claude => "claude",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DetectionMethod {
+    LogFile,
+    StateFile,
+    SessionFile,
+    Process,
+    HookState,
+    Unknown,
+}
+
+impl DetectionMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LogFile => "log_file",
+            Self::StateFile => "state_file",
+            Self::SessionFile => "session_file",
+            Self::Process => "process",
+            Self::HookState => "hook_state",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceConfidence {
+    Confirmed,
+    Degraded,
+    Untrusted,
+}
+
+impl SourceConfidence {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Confirmed => "confirmed",
+            Self::Degraded => "degraded",
+            Self::Untrusted => "untrusted",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceVisualState {
+    Undiscovered,
+    Idle,
+    Working,
+    Attention,
+    Blocking,
+    Untrusted,
+}
+
+impl SourceVisualState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Undiscovered => "undiscovered",
+            Self::Idle => "idle",
+            Self::Working => "working",
+            Self::Attention => "attention",
+            Self::Blocking => "blocking",
+            Self::Untrusted => "untrusted",
+        }
+    }
+
+    pub fn from_hook_state(state: &AgentState, has_stale: bool) -> Self {
+        if has_stale {
+            return Self::Untrusted;
+        }
+
+        match state {
+            AgentState::Idle => Self::Idle,
+            AgentState::Working => Self::Working,
+            AgentState::Done => Self::Attention,
+            AgentState::Waiting => Self::Blocking,
+            AgentState::Error => Self::Blocking,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WidgetMountState {
+    Attached,
+    TrayOnly,
+    Retrying,
+}
+
+impl WidgetMountState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Attached => "attached",
+            Self::TrayOnly => "tray_only",
+            Self::Retrying => "retrying",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceStatus {
+    pub source_id: SourceId,
+    pub state: SourceVisualState,
+    pub confidence: SourceConfidence,
+    pub method: DetectionMethod,
+    pub updated_at: u64,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppStatusSnapshot {
+    pub widget_mount_state: WidgetMountState,
+    pub overall_state: SourceVisualState,
+    pub last_widget_attach_at: Option<u64>,
+    pub last_detection_refresh_at: Option<u64>,
+    pub last_error_summary: Option<String>,
+    pub sources: BTreeMap<String, SourceStatus>,
+}
+
+impl AppStatusSnapshot {
+    pub fn empty() -> Self {
+        let mut sources = BTreeMap::new();
+        for source_id in [SourceId::Codex, SourceId::Claude] {
+            sources.insert(
+                source_id.as_str().to_string(),
+                SourceStatus {
+                    source_id,
+                    state: SourceVisualState::Undiscovered,
+                    confidence: SourceConfidence::Degraded,
+                    method: DetectionMethod::Unknown,
+                    updated_at: 0,
+                    message: None,
+                },
+            );
+        }
+
+        Self {
+            widget_mount_state: WidgetMountState::Attached,
+            overall_state: SourceVisualState::Undiscovered,
+            last_widget_attach_at: None,
+            last_detection_refresh_at: None,
+            last_error_summary: None,
+            sources,
+        }
+    }
+}
+
+impl SourceStatus {
+    pub fn undiscovered(source_id: SourceId) -> Self {
+        Self {
+            source_id,
+            state: SourceVisualState::Undiscovered,
+            confidence: SourceConfidence::Degraded,
+            method: DetectionMethod::Unknown,
+            updated_at: 0,
+            message: None,
+        }
+    }
+}
