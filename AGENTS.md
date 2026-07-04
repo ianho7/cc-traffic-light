@@ -2,51 +2,112 @@
 
 ## Project Structure & Module Organization
 
-This repository is centered on a Win11 taskbar proof of concept in `taskbar-widget/`.
+This repository is now a mixed Rust plus PNPM workspace for a Win32 taskbar host with a standalone Tauri settings app.
 
-- `taskbar-widget/src/main.rs` owns process startup, window creation, painting, and the message loop.
+- `taskbar-widget/` is the native host crate. It owns the widget window, tray, detector loop, fallback settings paths, and the host-side named-pipe server.
+- `taskbar-settings-tauri/` is the React plus Tauri settings application. `src/` holds the frontend UI and `src-tauri/` holds the Rust backend crate.
+- `crates/shared-core/` is the shared Rust business layer for config models, snapshot DTOs, settings services, and IPC contract types.
+- `docs/plan/`, `docs/checklist/`, `docs/reflections/`, and `docs/handoff/` track architecture, execution state, reflections, and session handoffs.
+
+Key host entry points:
+
+- `taskbar-widget/src/main.rs` owns process startup, host window creation, settings infrastructure binding, painting, and the message loop.
+- `taskbar-widget/src/settings_process.rs` owns Tauri settings process launch, reuse, fallback, and shutdown behavior.
+- `taskbar-widget/src/settings_bridge.rs` owns the host-side settings facade used by fallback UIs and Tauri IPC.
+- `taskbar-widget/src/tauri_settings_ipc.rs` owns the named-pipe server for Tauri settings commands.
 - `taskbar-widget/src/taskbar.rs` owns taskbar probing, `SetParent`, positioning, layout diagnostics, and JSON output.
 - `taskbar-widget/src/win32.rs` contains small Win32 helpers for logging, DPI, HWND, and RECT formatting.
-- `taskbar-widget/scripts/diagnose-taskbar-loop.ps1` runs focused taskbar visibility diagnostics.
-- `docs/plan/`, `docs/checklist/`, `docs/reflections/`, and `docs/handoff/` hold planning, execution checklists, task reflections, and session handoffs.
 
-Build artifacts live under `taskbar-widget/target/` and should not be treated as source.
+Build artifacts live under the root `target/` directory and `taskbar-settings-tauri/dist/`; they should not be treated as source.
 
 ## Build, Test, and Development Commands
 
-Run commands from `taskbar-widget/` unless noted otherwise.
+Run commands from the repository root `D:\project\cc-traffic-light` unless a script explicitly says otherwise.
 
 ```powershell
-cargo check
+cargo check -p taskbar-widget --offline
 ```
 
-Checks Rust code quickly without producing a runnable binary.
+Checks the native host crate quickly without producing a runnable binary.
 
 ```powershell
-cargo build
-cargo run
+cargo test --workspace --offline
 ```
 
-Builds or runs the Win32 taskbar MVP. `cargo run` requires a Windows desktop session for meaningful manual verification.
+Runs the current Rust test set for `shared-core`, the Tauri backend crate, and the host workspace members.
 
 ```powershell
-.\scripts\diagnose-taskbar-loop.ps1 -SkipBuild -Parents shell -Anchors tray_notify -CoordModes rect_delta
+pnpm build
 ```
 
-Runs the focused Win11 diagnostic path and writes output under `target/diagnose-taskbar-loop/`.
+Builds the Tauri settings frontend assets under `taskbar-settings-tauri/dist/`.
+
+```powershell
+cargo build -p taskbar-settings-tauri --offline
+cargo build -p taskbar-widget --offline
+```
+
+Builds the standalone settings process first, then rebuilds the host as the final validation artifact.
+
+```powershell
+.\taskbar-widget\scripts\validate-tauri-settings-lifecycle.ps1 -Configuration debug -TimeoutSeconds 20
+```
+
+Runs the end-to-end lifecycle check for spawning, reusing, closing, reopening, and recovering the Tauri settings process.
+
+Important build constraint:
+
+- Do not use `cargo build --workspace` as the host acceptance build for `taskbar-widget.exe`.
+- The workspace-wide build can unify Tauri-side features back into the host dependency graph and reintroduce the `TaskDialogIndirect` loader failure.
+- When validating the host executable, keep `taskbar-widget` as the last separately built package.
 
 ## Coding Style & Naming Conventions
 
-Use Rust 2024 conventions and keep the current simple module split. Prefer clear snake_case function names such as `probe_taskbar`, `attach_to_taskbar`, and `position_in_taskbar`. Keep Win32 wrapper helpers in `win32.rs`; keep taskbar-specific policy in `taskbar.rs`. Use `cargo fmt` before larger Rust changes.
+Use Rust 2024 conventions and keep the current boundary split intact.
+
+- Prefer clear snake_case function names such as `probe_taskbar`, `open_or_focus_tauri_settings`, and `request_manual_refresh`.
+- Keep Win32 wrapper helpers in `win32.rs`.
+- Keep taskbar-specific policy in `taskbar.rs`.
+- Keep settings process lifecycle in `settings_process.rs`.
+- Keep shared business types and IPC DTOs in `crates/shared-core/`; do not leak Win32 handles or Tauri runtime types into that crate.
+
+Use `cargo fmt` before larger Rust changes. Keep frontend naming consistent with the existing settings page and DTO terminology.
 
 ## Testing Guidelines
 
-There is no formal test suite yet. Minimum validation is `cargo check`, followed by manual `cargo run` on Win11. For taskbar visibility work, record both logs and human observations; `PrintWindow` or screen captures are diagnostic aids, not final proof of user-visible success.
+There is still no large formal end-to-end test suite, so validation is layered:
+
+1. `cargo check -p taskbar-widget --offline`
+2. `cargo test --workspace --offline`
+3. `pnpm build`
+4. targeted `cargo build -p ... --offline`
+5. manual or scripted Windows desktop verification
+
+For taskbar visibility or lifecycle work, record both logs and observable behavior. `PrintWindow`, screenshots, and runtime logs are diagnostics, not final proof by themselves.
+
+When touching the settings migration path, prefer updating or reusing:
+
+- `taskbar-widget/scripts/validate-tauri-settings-lifecycle.ps1`
+- `docs/checklist/tauri-settings-migration.md`
+- `docs/handoff/2026-07-04-0130.md`
 
 ## Commit & Pull Request Guidelines
 
-Current git history is not reliably readable from this workspace, so no established commit convention was confirmed. Use short imperative commits with scope, for example `taskbar: add dpi diagnostics`. Pull requests should include purpose, changed files, validation commands, manual visibility result, and links to relevant docs or checklist items.
+Current git history is not reliably readable from this workspace, so no established commit convention was confirmed. Use short imperative commits with scope, for example `settings: harden tauri lifecycle validation`.
+
+Pull requests should include:
+
+- purpose
+- changed files
+- validation commands
+- manual Windows verification result when relevant
+- links to the active checklist or handoff docs
 
 ## Agent-Specific Instructions
 
-Keep changes narrow and evidence-driven. Do not expand into classic taskbar, multi-monitor, transparency, D2D, or general plugin architecture unless the active checklist explicitly asks for it. Update `docs/reflections/` or `docs/handoff/` when a debugging turn changes the diagnosis or next-step recommendation.
+Keep changes narrow and evidence-driven.
+
+- Do not expand Tauri migration into rewriting the widget, taskbar attach path, or detector main loop unless the active checklist explicitly asks for it.
+- Preserve the current architecture boundary: Win32 host plus standalone Tauri settings plus `shared-core`.
+- Update `docs/reflections/` or `docs/handoff/` when a debugging turn changes the diagnosis, build constraint, or next-step recommendation.
+- If a task touches settings lifecycle validation, be explicit about which executable path was validated: root `target\debug\taskbar-widget.exe` versus any stale per-crate artifact.

@@ -1,149 +1,128 @@
 # FILETREE
 
-_Manual fallback manifest. The filetree script could not apply because this workspace has nested Git repositories._
-
 ## (root)/
 
-- `AGENTS.md`: Contributor guide for repository layout, commands, style, validation, and agent operating constraints.
-- `FILETREE.md`: Human-maintained map of the current workspace structure, key code paths, and project documentation.
-- `.gitignore`: Ignore rules for local artifacts, build output, and generated workspace files.
-
-## .codex/
-
-- `hooks.json`: Project-local Codex lifecycle hook configuration that writes shared task state through `taskbar_widget_hook.exe`.
+- `AGENTS.md`: Contributor guide for workspace layout, build commands, validation expectations, and agent constraints.
+- `FILETREE.md`: Workspace structure manifest for the Win32 host, Tauri settings app, shared core, and migration docs.
+- `.gitignore`: Ignore rules for build output, package-manager caches, screenshots, and local diagnostics.
+- `Cargo.toml`: Root Cargo workspace manifest for `shared-core`, `taskbar-settings-tauri`, and `taskbar-widget`.
+- `Cargo.lock`: Locked Rust dependency graph for the whole workspace.
+- `package.json`: Root PNPM scripts for building and running the Tauri settings frontend and app shell.
+- `pnpm-workspace.yaml`: PNPM workspace definition that includes the Tauri settings frontend package.
+- `pnpm-lock.yaml`: Locked PNPM dependency graph for the frontend workspace.
 
 ## .claude/
 
-- `settings.local.json`: Project-local Claude Code hooks configuration that writes shared task state through `taskbar_widget_hook.exe`.
-
-## .claude/hooks/
-
-- `sample-hook.ps1`: Shape-only Claude hook sampler that records redacted payload structure for integration debugging.
+- `settings.local.json`: Project-local Claude Code hook configuration that writes shared task state through `taskbar_widget_hook.exe`.
 
 ## .claude/hook-logs/
 
 - `*.jsonl`: Real Claude hook samples captured for payload-shape verification and field-path evidence.
 
+## .claude/hooks/
+
+- `sample-hook.ps1`: Shape-only Claude hook sampler that records redacted payload structure for integration debugging.
+
+## .codex/
+
+- `hooks.json`: Project-local Codex lifecycle hook configuration that writes shared task state through `taskbar_widget_hook.exe`.
+
+## crates/
+
+- `shared-core/`: Shared Rust business layer for config models, snapshot DTOs, settings services, and Tauri IPC contract types.
+
+## crates/shared-core/
+
+- `Cargo.toml`: Rust package manifest for the shared settings/config core crate.
+
+## docs/
+
+- `checklist/`: Execution checklists for widget, hook, traffic-light UI, and Tauri settings migration work.
+- `handoff/`: Session handoffs that capture current diagnosis, build constraints, and next-step recommendations.
+- `plan/`: Architecture, migration, and phased implementation plans for the host, hooks, UI, and Tauri integration.
+- `reflections/`: Per-task decision logs generated from checklist execution.
+
+## docs/checklist/
+
+- `tauri-settings-migration.md`: Active execution checklist for the Win32 host plus Tauri settings migration.
+
+## docs/handoff/
+
+- `2026-07-04-0130.md`: Current migration handoff covering the `TaskDialogIndirect` root cause, separate-build constraint, and lifecycle validation result.
+
+## docs/plan/
+
+- `README.md`: Reading guide for the plan set and how the major implementation phases relate to one another.
+- `tauri-settings-architecture-baseline.md`: Current architecture baseline for the Win32 host, Tauri settings process, shared core, and build constraints.
+- `tauri-settings-ipc-contract.md`: Named-pipe IPC contract for host and Tauri settings commands, envelopes, and DTO boundaries.
+- `tauri-settings-visual-fidelity-pass-1.md`: Visual comparison record for the first Tauri settings fidelity pass against the HTML demo baseline.
+
+## docs/reflections/
+
+- `task-TSM-*.md`: Tauri settings migration reflections for architecture, IPC, UI, lifecycle, validation, and documentation decisions.
+- `task-SSM-*.md`: Slint settings migration reflections retained as historical context for the Tauri follow-up work.
+- `task-*.md`: Earlier widget, hook, installer, and traffic-light UI reflections retained as project history.
+
+## target/
+
+- `debug/`: Root workspace Rust build output, including the runnable host and Tauri settings executables.
+
+## taskbar-settings-tauri/
+
+- `package.json`: PNPM package manifest for the React frontend and Tauri shell commands.
+- `index.html`: Vite HTML entry for the settings frontend.
+- `src/`: React settings UI, page structure, polling logic, and frontend DTO rendering.
+- `src-tauri/`: Tauri Rust backend that bridges frontend commands to the host named pipe.
+- `dist/`: Built frontend assets produced by `pnpm build`.
+
+## taskbar-settings-tauri/src-tauri/
+
+- `Cargo.toml`: Rust package manifest for the Tauri backend crate in the workspace.
+- `build.rs`: Tauri build-script entry for generated config and resources.
+- `tauri.conf.json`: Tauri app configuration for the standalone settings process.
+
 ## taskbar-widget/
 
-- `Cargo.toml`: Rust package manifest for the Win11 taskbar widget, hook state integration, and Win32 dependency features.
-- `Cargo.lock`: Locked Rust dependency graph for reproducible local builds.
-- `README.md`: Project overview, stable runtime path, hook integration notes, diagnostics, limitations, and related docs.
+- `Cargo.toml`: Rust package manifest for the Win32 host, tray integration, and fallback settings components.
+- `README.md`: Host-focused project overview, diagnostics guidance, and runtime notes.
+- `app.manifest`: Embedded Common Controls v6 manifest for the host executable.
+- `build.rs`: Host build script that embeds the application manifest during MSVC linking.
 - `examples.codex-hooks.toml`: Example Codex lifecycle hook configuration for feeding shared task state into the widget.
 - `examples.claude-hooks.json`: Example Claude Code hooks configuration for feeding shared task state into the widget.
-
-## taskbar-widget/src/
-
-- `main.rs`: Starts the widget, polls shared hook state, paints the traffic-light UI, and runs the Win32 message loop.
-- `agent_state.rs`: Shared hook state schema, JSON persistence, stale/TTL handling, and summary aggregation for Codex and Claude.
-- `hook_rules.rs`: Hook payload field extraction and event-to-state mapping for working, waiting, done, and error transitions.
-- `taskbar.rs`: Taskbar probing, parent attachment, layered-window setup, placement, diagnostics, and runtime state logging.
-- `win32.rs`: Small Win32 helper layer for logging, DPI awareness, HWND formatting, RECT formatting, and error helpers.
-- `lib.rs`: Library entry that exposes reusable modules for the widget binary and hook CLI.
-
-## taskbar-widget/src/bin/
-
-- `taskbar_widget_hook.rs`: Hook CLI for payload sampling, shared-state writes, and debug `set`/`clear`/`list` commands.
+- `scripts/`: PowerShell diagnostics and lifecycle validation scripts for the host and settings process.
+- `src/`: Win32 host, tray, detector, fallback settings, shared-state, and IPC server code.
 
 ## taskbar-widget/scripts/
 
 - `diagnose-taskbar-loop.ps1`: Focused Win11 taskbar visibility diagnosis loop for parent, anchor, coordinate, and render evidence.
 - `diagnose-widget-liveness.ps1`: Widget lifecycle and redraw diagnosis harness for runtime visibility and repaint regressions.
+- `validate-tauri-settings-lifecycle.ps1`: End-to-end lifecycle validator for spawning, reusing, closing, and recovering the Tauri settings process.
 - `codex-lifecycle-hook-dump.ps1`: Codex lifecycle hook dump script for redacted shape-only payload sampling.
 - `codex-notify-probe-config.ps1`: Helper that prepares or inspects Codex notify probe configuration during low-fidelity notify experiments.
 - `codex-notify-probe-wrapper.ps1`: Wrapper that captures Codex notify probe inputs while forwarding the original notify command shape.
 - `install-codex-hooks.ps1`: User-scoped Codex hooks installer for merging managed lifecycle hook entries into `hooks.json`.
 
-## docs/
+## taskbar-widget/src/
 
-- `claude-code-hooks-integration.md`: Integration notes, schema examples, and observed behavior for Claude Code hooks.
+- `main.rs`: Starts the host, binds settings infrastructure, paints the widget, and runs the Win32 plus Slint event loop.
+- `settings_process.rs`: Manages Tauri settings process launch, focus, reuse, fallback selection, and shutdown bookkeeping.
+- `settings_bridge.rs`: Host-side facade for reading snapshots, reading and saving config, applying changes, and issuing refresh requests.
+- `tauri_settings_ipc.rs`: Named-pipe server for Tauri settings commands and JSON request/response envelopes.
+- `settings_slint.rs`: Slint settings host retained as an explicit fallback while Tauri migration is still hardening.
+- `settings_window.rs`: Win32 fallback settings window and helper commands retained for deep fallback scenarios.
+- `app_config.rs`: Host-facing config helpers and compatibility layer around the shared settings model.
+- `ui_state.rs`: Runtime snapshot model and source-status projection used by the widget and settings surfaces.
+- `detector.rs`: Polling logic for Codex and Claude state detection and runtime refresh behavior.
+- `tray_icon.rs`: Tray icon creation, menu wiring, and command dispatch helpers for the host process.
+- `taskbar.rs`: Taskbar probing, parent attachment, layered-window setup, placement, diagnostics, and runtime state logging.
+- `win32.rs`: Small Win32 helper layer for logging, DPI awareness, HWND formatting, RECT formatting, and error helpers.
+- `agent_state.rs`: Shared hook state schema, JSON persistence, stale handling, and summary aggregation for Codex and Claude.
+- `hook_rules.rs`: Hook payload field extraction and event-to-state mapping for working, waiting, done, and error transitions.
+- `runtime_contract.rs`: Shared runtime DTOs and compatibility helpers used between host layers and UI surfaces.
+- `i18n.rs`: Localization loader and label mapping for tray, fallback settings, and status text.
+- `autostart.rs`: Windows autostart registration helpers for settings-controlled launch behavior.
+- `lib.rs`: Library entry that exposes reusable host modules for the widget binary and hook CLI.
 
-## docs/plan/
+## taskbar-widget/src/bin/
 
-- `README.md`: Reading guide for the plan set and how the major implementation phases relate to one another.
-
-## docs/plan/mvp-startup/
-
-- `README.md`: Reading guide for the original Win11 taskbar MVP startup plan and supporting design notes.
-- `01-mvp-plan.md`: Baseline MVP plan for the first Rust taskbar proof of concept.
-- `02-scope-and-decisions.md`: Scope boundaries, assumptions, and excluded product work for the MVP.
-- `03-project-bootstrap.md`: Bootstrap notes for creating and structuring the Rust taskbar widget project.
-- `04-implementation-phases.md`: Phase-by-phase implementation path from window creation through taskbar embedding.
-- `05-file-layout.md`: Planned Rust module layout and responsibilities for `main`, `taskbar`, and `win32`.
-- `06-validation-and-debugging.md`: Validation strategy and debugging guidance for taskbar visibility and runtime behavior.
-- `07-risks-and-watchlist.md`: Risk list and anti-overengineering guidance for the Win11 taskbar path.
-- `08-trafficmonitor-reference-map.md`: Reference map to external TrafficMonitor materials used for comparison.
-- `09-win11-diagnosis-replan.md`: Replan after early Win11 diagnosis, defining the active visibility-fix strategy.
-
-## docs/plan/hook-integration/
-
-- `README.md`: Reading guide for the hook integration design and adjustment planning documents.
-- `01-mvp-plan.md`: MVP-first plan for Codex and Claude hook integration into the shared widget state model.
-- `02-grill-decisions-and-adr.md`: Decision record and tradeoff analysis for hook integration architecture.
-- `03-hook-adjustment-plan.md`: Follow-up plan for tightening hook semantics, config boundaries, and validation steps.
-
-## docs/plan/p0-codex-state-write/
-
-- `README.md`: Plan for proving Codex lifecycle hooks can write shared state for the widget.
-
-## docs/plan/p1-global-hook-install/
-
-- `README.md`: Plan for installing managed Codex lifecycle hooks at user scope.
-
-## docs/plan/p2-claude-code-hook-validation/
-
-- `README.md`: Plan for validating real Claude Code hooks, payload fields, and shared-state writes.
-
-## docs/plan/p3-taskbar-traffic-light-ui/
-
-- `README.md`: Plan for replacing the text-first widget with a minimal traffic-light taskbar UI.
-
-## docs/plan/p4-runtime-hardening/
-
-- `README.md`: Plan stub for runtime hardening after the traffic-light UI and hook-state path stabilize.
-
-## docs/checklist/
-
-- `win11-taskbar-widget-preflight.md`: Environment and prerequisite checks for the original Rust taskbar widget MVP.
-- `win11-taskbar-widget-checklist.md`: Original implementation checklist for building the Win11 taskbar widget MVP.
-- `win11-taskbar-widget-loop-spec.md`: Original loop specification for executing the Win11 widget checklist.
-- `taskbar-visibility-diagnosis-loop.md`: Diagnosis notes for visibility failures and evidence-driven taskbar debugging.
-- `win11-taskbar-runtime-map.md`: Runtime map of discovered taskbar windows, handles, anchors, and embedding choices.
-- `win11-taskbar-visibility-replan-checklist.md`: Active checklist for fixing Win11 visibility after early diagnosis.
-- `win11-taskbar-visibility-replan-loop-spec.md`: Loop rules and stop conditions for the visibility replan work.
-- `taskbar-phase4-printwindow.png`: Diagnostic PrintWindow capture artifact used during early visibility investigations.
-- `hook-integration-checklist.md`: Initial checklist for shared hook state integration across Codex and Claude.
-- `hook-integration-validation.md`: Validation notes for hook state writes, ordering, and state transitions.
-- `hook-adjustment-checklist.md`: Checklist for tightening hook rules, config boundaries, and state semantics.
-- `hook-payload-sampling.md`: Evidence log of sampled real hook payload shapes and confirmed field paths.
-- `codex-notify-probe.md`: Findings showing Codex notify is low-fidelity and not suitable as the main state path.
-- `codex-lifecycle-hooks-validation.md`: Validation record proving real Codex lifecycle hooks provide usable session identity.
-- `p0-codex-state-write.md`: Execution checklist for proving Codex lifecycle hooks write shared task state.
-- `p1-global-hook-install.md`: Execution checklist for user-scoped Codex hook installation and validation.
-- `p2-claude-code-hook-validation.md`: Execution checklist for validating Claude Code hook payloads and state writes.
-- `p3-taskbar-traffic-light-ui.md`: Execution checklist for the traffic-light taskbar UI, manual matrix tests, and real-hook smoke tests.
-
-## docs/handoff/
-
-- `2026-06-30-*.md`: Early session handoffs covering taskbar visibility diagnosis, runtime mapping, and MVP path corrections.
-- `2026-07-01-*.md`: Mid-project handoffs covering Codex hooks, installer work, Claude validation, and runtime redraw debugging.
-- `2026-07-02-1128.md`: Current handoff summarizing P3 traffic-light UI work, real-hook mapping fixes, and remaining stale verification.
-
-## docs/reflections/
-
-- `task-PRE-*.md`: Early preflight reflections for setup checks, scope confirmation, and environment assumptions.
-- `task-P1-*.md`: Early Phase 1 reflections for probing, window setup, and taskbar attachment choices.
-- `task-P2-*.md`: Early Phase 2 reflections for rendering, state modeling, and placement decisions.
-- `task-P3-*.md`: Early Phase 3 reflections for positioning, layout, and visibility experiments.
-- `task-P4-*.md`: Early Phase 4 reflections for diagnostics, captures, and runtime evidence gathering.
-- `task-P5-*.md`: Early Phase 5 reflections for documentation, constraints, and deferred scope decisions.
-- `task-P6-*.md`: Early Phase 6 reflections for cleanup, runtime mapping, and finalization tasks.
-- `task-VAL-*.md`: Early validation reflections for build, run, visibility, and repeatability checks.
-- `task-DOC-*.md`: Early documentation reflections for README, maps, and supporting notes.
-- `task-CLN-*.md`: Early cleanup reflections for logs, screenshots, and naming consistency.
-- `task-HC-*.md`: Hook integration reflections for initial shared-state design and validation.
-- `task-HCA-*.md`: Hook adjustment reflections for notify probing, rule tightening, and Codex boundary corrections.
-- `task-CSW-*.md`: Codex state-write reflections for lifecycle hook validation and live widget update checks.
-- `task-GHI-*.md`: Global hook installer reflections for merge logic, dry-runs, apply flows, and multi-session validation.
-- `task-CCH-*.md`: Claude Code hook validation reflections for real payload sampling, field confirmation, and shared-state writes.
-- `task-TLU-*.md`: Traffic-light UI reflections for visual contract decisions, implementation, manual state tests, and real-hook smoke tests.
+- `taskbar_widget_hook.rs`: Hook CLI for payload sampling, shared-state writes, and debug `set` or `clear` commands.

@@ -1,0 +1,6 @@
+packages:
+  - "taskbar-settings-tauri"
+onlyBuiltDependencies:
+  - "esbuild"
+allowBuilds:
+  esbuild: set this to true or false

@@ -1,0 +1,10 @@
+{
+  "name": "cc-traffic-light-workspace",
+  "private": true,
+  "scripts": {
+    "settings:dev": "pnpm -C taskbar-settings-tauri dev",
+    "settings:build": "pnpm -C taskbar-settings-tauri build",
+    "settings:tauri:dev": "pnpm -C taskbar-settings-tauri tauri dev",
+    "settings:tauri:build": "pnpm -C taskbar-settings-tauri tauri build"
+  }
+}

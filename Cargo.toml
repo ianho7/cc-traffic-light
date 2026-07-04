@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/shared-core", "taskbar-settings-tauri/src-tauri", "taskbar-widget"]
+resolver = "3"
