@@ -19,23 +19,23 @@ use taskbar_widget::{
     agent_state::{self},
     app_config, detector,
     runtime_contract::RuntimeContract,
-    ui_state::{AppStatusSnapshot, SourceVisualState, WidgetMountState},
+    ui_state::{AppStatusSnapshot, WidgetMountState},
+    widget_render::{self, WidgetHotZone},
 };
 use windows::{
     Win32::{
-        Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::Gdi::{
-            BeginPaint, CreatePen, CreateSolidBrush, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE,
-            DT_VCENTER, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, InvalidateRect,
-            PAINTSTRUCT, PS_NULL, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
+            BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT, ScreenToClient,
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DispatchMessageW,
-            GetClientRect, GetMessageW, IDC_ARROW, KillTimer, LoadCursorW, MSG, PostQuitMessage,
-            RegisterClassW, SW_HIDE, SW_SHOW, SetCursor, SetTimer, ShowWindow, TranslateMessage,
-            WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_DESTROY, WM_NCDESTROY,
-            WM_PAINT, WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
+            GetClientRect, GetMessageW, HTCLIENT, HTTRANSPARENT, IDC_ARROW, KillTimer,
+            LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SetCursor,
+            SetTimer, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
+            WM_COMMAND, WM_DESTROY, WM_LBUTTONUP, WM_NCDESTROY, WM_NCHITTEST, WM_PAINT,
+            WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
         },
     },
     core::{Error, Result, w},
@@ -52,24 +52,7 @@ const WIDGET_RETRY_INTERVAL_MS: u64 = 5_000;
 #[derive(Clone)]
 struct PaintState {
     snapshot: AppStatusSnapshot,
-}
-
-struct SourcePaintStyle {
-    label: &'static str,
-    state: SourceVisualState,
-    visible: bool,
-    green: RECT,
-    yellow: RECT,
-    red: RECT,
-}
-
-struct WidgetPaintStyle {
-    background: COLORREF,
-    divider: COLORREF,
-    label: COLORREF,
-    codex: Option<SourcePaintStyle>,
-    claude: Option<SourcePaintStyle>,
-    show_divider: bool,
+    hot_zones: Vec<WidgetHotZone>,
 }
 
 #[derive(Clone, Copy)]
@@ -304,6 +287,11 @@ unsafe extern "system" fn window_proc(
                 unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
             }
         }
+        WM_NCHITTEST => handle_hit_test(hwnd, lparam),
+        WM_LBUTTONUP => {
+            handle_widget_click(hwnd, lparam);
+            LRESULT(0)
+        }
         tray_icon::TRAY_CALLBACK_MESSAGE => {
             if let Some(action) =
                 tray_icon::handle_callback(hwnd, wparam, lparam, &settings_bridge::current_config())
@@ -376,6 +364,7 @@ fn initialize_paint_state() {
     ));
     let _ = PAINT_STATE.set(Mutex::new(PaintState {
         snapshot: snapshot.clone(),
+        hot_zones: Vec::new(),
     }));
     runtime_log(&format!(
         "initialize_app_snapshot overall={} codex={} claude={}",
@@ -482,38 +471,18 @@ fn paint_window(hwnd: HWND) -> LRESULT {
     ));
 
     unsafe {
-        let hdc = BeginPaint(hwnd, &mut paint);
+        let _ = BeginPaint(hwnd, &mut paint);
         let _ = GetClientRect(hwnd, &mut client_rect);
-        let style = paint_style(&snapshot, &client_rect);
-
-        let background_brush = CreateSolidBrush(style.background);
-        let _ = FillRect(hdc, &client_rect, background_brush);
-
-        let divider_pen = CreatePen(PS_NULL, 0, style.divider);
-        let _ = SelectObject(hdc, divider_pen);
-        let divider_brush = CreateSolidBrush(style.divider);
-        if style.show_divider {
-            let divider_rect = RECT {
-                left: client_rect.left + ((client_rect.right - client_rect.left) / 2) - 1,
-                top: client_rect.top + 7,
-                right: client_rect.left + ((client_rect.right - client_rect.left) / 2) + 1,
-                bottom: client_rect.bottom - 7,
-            };
-            let _ = FillRect(hdc, &divider_rect, divider_brush);
-        }
-
-        let _ = SetBkMode(hdc, TRANSPARENT);
-        let _ = SetTextColor(hdc, style.label);
-        if let Some(codex) = &style.codex {
-            paint_source_group(hdc, codex);
-        }
-        if let Some(claude) = &style.claude {
-            paint_source_group(hdc, claude);
-        }
-
-        let _ = DeleteObject(divider_pen);
-        let _ = DeleteObject(divider_brush);
-        let _ = DeleteObject(background_brush);
+    }
+    let frame =
+        widget_render::build_widget_frame(&snapshot, &settings_bridge::current_config(), &client_rect);
+    widget_render::apply_widget_frame(hwnd, &frame);
+    if let Some(lock) = PAINT_STATE.get()
+        && let Ok(mut state) = lock.lock()
+    {
+        state.hot_zones = frame.hot_zones.clone();
+    }
+    unsafe {
         let _ = EndPaint(hwnd, &paint);
     }
 
@@ -523,95 +492,6 @@ fn paint_window(hwnd: HWND) -> LRESULT {
         snapshot.overall_state.as_str()
     ));
     LRESULT(0)
-}
-
-fn paint_style(snapshot: &AppStatusSnapshot, rect: &RECT) -> WidgetPaintStyle {
-    let config = settings_bridge::current_config();
-    let width = rect.right - rect.left;
-    let left_group_left = rect.left + 16;
-    let right_group_left = rect.left + (width / 2) + 16;
-    let centered_group_left = rect.left + ((width - 37) / 2);
-    let top = rect.top;
-
-    let codex_enabled = config.monitoring.codex_enabled;
-    let claude_enabled = config.monitoring.claude_enabled;
-    let show_divider = codex_enabled && claude_enabled;
-
-    let codex_left = if codex_enabled && !claude_enabled {
-        centered_group_left
-    } else {
-        left_group_left
-    };
-    let claude_left = if claude_enabled && !codex_enabled {
-        centered_group_left
-    } else {
-        right_group_left
-    };
-
-    WidgetPaintStyle {
-        background: rgb(14, 14, 16),
-        divider: rgb(58, 58, 64),
-        label: rgb(228, 228, 232),
-        codex: codex_enabled.then(|| SourcePaintStyle {
-            label: "C",
-            state: snapshot
-                .sources
-                .get("codex")
-                .map(|source| source.state)
-                .unwrap_or(SourceVisualState::Idle),
-            visible: true,
-            green: RECT {
-                left: codex_left,
-                top: top + 20,
-                right: codex_left + 9,
-                bottom: top + 29,
-            },
-            yellow: RECT {
-                left: codex_left + 14,
-                top: top + 20,
-                right: codex_left + 23,
-                bottom: top + 29,
-            },
-            red: RECT {
-                left: codex_left + 28,
-                top: top + 20,
-                right: codex_left + 37,
-                bottom: top + 29,
-            },
-        }),
-        claude: claude_enabled.then(|| SourcePaintStyle {
-            label: "L",
-            state: snapshot
-                .sources
-                .get("claude")
-                .map(|source| source.state)
-                .unwrap_or(SourceVisualState::Idle),
-            visible: true,
-            green: RECT {
-                left: claude_left,
-                top: top + 20,
-                right: claude_left + 9,
-                bottom: top + 29,
-            },
-            yellow: RECT {
-                left: claude_left + 14,
-                top: top + 20,
-                right: claude_left + 23,
-                bottom: top + 29,
-            },
-            red: RECT {
-                left: claude_left + 28,
-                top: top + 20,
-                right: claude_left + 37,
-                bottom: top + 29,
-            },
-        }),
-        show_divider,
-    }
-}
-
-fn rgb(red: u8, green: u8, blue: u8) -> COLORREF {
-    COLORREF(u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16))
 }
 
 fn install_panic_hook() {
@@ -656,6 +536,47 @@ fn display_snapshot_changed(current: &AppStatusSnapshot, next: &AppStatusSnapsho
     current.overall_state != next.overall_state
         || current.last_error_summary != next.last_error_summary
         || current.sources != next.sources
+}
+
+fn handle_hit_test(hwnd: HWND, lparam: LPARAM) -> LRESULT {
+    let mut point = POINT {
+        x: low_word(lparam.0 as u32) as i16 as i32,
+        y: high_word(lparam.0 as u32) as i16 as i32,
+    };
+    unsafe {
+        let _ = ScreenToClient(hwnd, &mut point);
+    }
+
+    if current_hot_group(point).is_some() {
+        LRESULT(HTCLIENT as isize)
+    } else {
+        LRESULT(HTTRANSPARENT as isize)
+    }
+}
+
+fn handle_widget_click(hwnd: HWND, lparam: LPARAM) {
+    let point = POINT {
+        x: low_word(lparam.0 as u32) as i16 as i32,
+        y: high_word(lparam.0 as u32) as i16 as i32,
+    };
+    if current_hot_group(point).is_some() {
+        handle_tray_action(hwnd, tray_icon::TrayAction::OpenSettings);
+    }
+}
+
+fn current_hot_group(point: POINT) -> Option<widget_render::WidgetGroupId> {
+    PAINT_STATE
+        .get()
+        .and_then(|lock| lock.lock().ok())
+        .and_then(|state| widget_render::hit_test(&state.hot_zones, point))
+}
+
+fn low_word(value: u32) -> u16 {
+    (value & 0xFFFF) as u16
+}
+
+fn high_word(value: u32) -> u16 {
+    ((value >> 16) & 0xFFFF) as u16
 }
 
 fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
@@ -884,74 +805,5 @@ fn tray_command_from_wparam(wparam: WPARAM) -> Option<tray_icon::TrayAction> {
         tray_icon::TRAY_CMD_REFRESH => Some(tray_icon::TrayAction::Refresh),
         tray_icon::TRAY_CMD_EXIT => Some(tray_icon::TrayAction::Exit),
         _ => None,
-    }
-}
-
-fn paint_source_group(hdc: windows::Win32::Graphics::Gdi::HDC, style: &SourcePaintStyle) {
-    if !style.visible {
-        return;
-    }
-    draw_group_label(hdc, style.label, style.green.left - 8, style.green.top - 10);
-    draw_light(hdc, style.green, lamp_fill(style.state, 0));
-    draw_light(hdc, style.yellow, lamp_fill(style.state, 1));
-    draw_light(hdc, style.red, lamp_fill(style.state, 2));
-}
-
-fn draw_group_label(hdc: windows::Win32::Graphics::Gdi::HDC, label: &str, left: i32, top: i32) {
-    let mut wide = win32::wide_text(label);
-    let mut rect = RECT {
-        left,
-        top,
-        right: left + 16,
-        bottom: top + 16,
-    };
-    unsafe {
-        let _ = DrawTextW(
-            hdc,
-            &mut wide,
-            &mut rect,
-            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
-        );
-    }
-}
-
-fn draw_light(hdc: windows::Win32::Graphics::Gdi::HDC, rect: RECT, color: COLORREF) {
-    unsafe {
-        let brush = CreateSolidBrush(color);
-        let null_pen = CreatePen(PS_NULL, 0, COLORREF(0));
-        let old_brush = SelectObject(hdc, brush);
-        let old_pen = SelectObject(hdc, null_pen);
-        let _ = Ellipse(hdc, rect.left, rect.top, rect.right, rect.bottom);
-        let _ = SelectObject(hdc, old_pen);
-        let _ = SelectObject(hdc, old_brush);
-        let _ = DeleteObject(null_pen);
-        let _ = DeleteObject(brush);
-    }
-}
-
-fn lamp_fill(state: SourceVisualState, lamp_index: usize) -> COLORREF {
-    let off = rgb(48, 48, 52);
-    match state {
-        SourceVisualState::Idle | SourceVisualState::Working => {
-            if lamp_index == 0 {
-                rgb(82, 214, 113)
-            } else {
-                off
-            }
-        }
-        SourceVisualState::Completed | SourceVisualState::NeedsAttention => {
-            if lamp_index == 1 {
-                rgb(255, 210, 76)
-            } else {
-                off
-            }
-        }
-        SourceVisualState::Error => {
-            if lamp_index == 2 {
-                rgb(255, 108, 96)
-            } else {
-                off
-            }
-        }
     }
 }

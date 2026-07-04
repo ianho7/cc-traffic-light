@@ -175,6 +175,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
                 "overview".to_string(),
                 "general".to_string(),
                 "monitoring".to_string(),
+                "appearance".to_string(),
                 "diagnostics".to_string(),
                 "about".to_string(),
             ],
@@ -203,6 +204,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
             "overview".to_string(),
             "general".to_string(),
             "monitoring".to_string(),
+            "appearance".to_string(),
             "diagnostics".to_string(),
             "about".to_string(),
         ],
@@ -264,6 +266,11 @@ fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, TauriComm
         "appearance.widget_size".to_string(),
         "appearance.show_labels".to_string(),
         "appearance.reduced_motion".to_string(),
+        "widget_visual.placement".to_string(),
+        "widget_visual.palette.green".to_string(),
+        "widget_visual.palette.yellow".to_string(),
+        "widget_visual.palette.red".to_string(),
+        "widget_visual.palette.off".to_string(),
         "localization.language".to_string(),
         "diagnostics.last_opened_page".to_string()
     ];

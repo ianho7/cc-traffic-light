@@ -101,6 +101,7 @@ cargo build -p taskbar-widget --offline
 
 - [Tauri Settings Architecture Baseline](docs/plan/tauri-settings-architecture-baseline.md)
 - [Tauri Settings IPC Contract](docs/plan/tauri-settings-ipc-contract.md)
+- [Taskbar Widget Visual Roadmap](docs/plan/taskbar-widget-visual-roadmap.md)
 - [Tauri Settings Migration Checklist](docs/checklist/tauri-settings-migration.md)
 - [Latest Handoff](docs/handoff/2026-07-04-1429.md)
 - [Taskbar Widget README](taskbar-widget/README.md)

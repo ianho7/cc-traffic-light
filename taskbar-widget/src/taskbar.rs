@@ -1,16 +1,17 @@
 use std::{ffi::OsString, fs, path::PathBuf, thread, time::Duration};
 
+use shared_core::app_config::WidgetPlacement;
 use windows::{
     Win32::{
         Foundation::{COLORREF, HWND, POINT, RECT},
         Graphics::Gdi::{InvalidateRect, ScreenToClient, UpdateWindow},
         UI::WindowsAndMessaging::{
             FindWindowExW, FindWindowW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetParent,
-            GetWindowLongPtrW, HWND_TOP, LWA_ALPHA, MoveWindow, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetLayeredWindowAttributes,
-            SetParent, SetWindowLongPtrW, SetWindowPos, WS_BORDER, WS_CAPTION, WS_CHILD,
-            WS_DLGFRAME, WS_EX_LAYERED, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
-            WS_THICKFRAME, WS_VISIBLE,
+            GetClassNameW, GetWindowLongPtrW, HWND_TOP, IsWindowVisible, LWA_ALPHA, MoveWindow,
+            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+            SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW,
+            SetWindowPos, WS_BORDER, WS_CAPTION, WS_CHILD, WS_DLGFRAME, WS_EX_LAYERED,
+            WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
         },
     },
     core::{PCWSTR, w},
@@ -159,14 +160,16 @@ impl RefreshMode {
 pub enum LayeredMode {
     Off,
     Opaque,
+    PerPixel,
 }
 
 impl LayeredMode {
     fn from_env(value: Option<&str>) -> Self {
-        match value.unwrap_or("opaque").to_ascii_lowercase().as_str() {
+        match value.unwrap_or("per_pixel").to_ascii_lowercase().as_str() {
             "off" => Self::Off,
             "opaque" => Self::Opaque,
-            _ => Self::Opaque,
+            "per_pixel" | "perpixel" | "alpha" => Self::PerPixel,
+            _ => Self::PerPixel,
         }
     }
 
@@ -174,6 +177,7 @@ impl LayeredMode {
         match self {
             Self::Off => "off",
             Self::Opaque => "opaque",
+            Self::PerPixel => "per_pixel",
         }
     }
 }
@@ -441,7 +445,7 @@ pub fn attach_to_taskbar(
     let previous_parent = unsafe { GetParent(hwnd).unwrap_or_default() };
     let style_before = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
     let ex_style_before = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
-    let layered_attempted = matches!(config.layered_mode, LayeredMode::Opaque);
+    let layered_attempted = !matches!(config.layered_mode, LayeredMode::Off);
     let mut layered_ok = false;
     let mut layered_last_error = 0;
 
@@ -453,10 +457,14 @@ pub fn attach_to_taskbar(
                 (ex_style_before as u32 | WS_EX_LAYERED.0) as isize,
             );
         }
-        win32::clear_last_error();
-        layered_ok =
-            unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).is_ok() };
-        layered_last_error = win32::last_error_code();
+        if matches!(config.layered_mode, LayeredMode::Opaque) {
+            win32::clear_last_error();
+            layered_ok =
+                unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).is_ok() };
+            layered_last_error = win32::last_error_code();
+        } else {
+            layered_ok = true;
+        }
     }
     let ex_style_after = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
 
@@ -601,18 +609,23 @@ pub fn position_in_taskbar(
         .max(parent_rect.bottom - parent_rect.top)
         .max(1);
     let enabled_group_count = enabled_group_count();
+    let runtime_config = settings_bridge::current_config();
     let module_width = match enabled_group_count {
         0 => 0,
         1 => 80.min(parent_width.max(1)),
         _ => 160.min(parent_width.max(1)),
     };
     let margin = 8;
-
-    let desired_screen_left = if is_valid_window(anchor) {
-        anchor_rect.left - module_width - margin
-    } else {
-        parent_rect.left
-    };
+    let occupied_rects = collect_peer_widget_rects(hwnd, probe, &parent_rect);
+    let desired_screen_left = resolve_module_left(
+        runtime_config.widget_visual.placement,
+        module_width,
+        margin,
+        &parent_rect,
+        &anchor_rect,
+        probe.start_button,
+        &occupied_rects,
+    );
     let desired_screen_top = parent_rect.top;
 
     let (x, y, width, height) = match config.coordinate_mode {
@@ -687,6 +700,150 @@ pub fn position_in_taskbar(
     }
 
     result
+}
+
+fn resolve_module_left(
+    placement: WidgetPlacement,
+    module_width: i32,
+    margin: i32,
+    parent_rect: &RECT,
+    right_anchor_rect: &RECT,
+    start_button: HWND,
+    occupied_rects: &[RECT],
+) -> i32 {
+    if module_width <= 0 {
+        return parent_rect.left;
+    }
+
+    let base_left = match placement {
+        WidgetPlacement::Right => {
+            if rect_has_area(right_anchor_rect) {
+                right_anchor_rect.left - module_width - margin
+            } else {
+                parent_rect.right - module_width - margin
+            }
+        }
+        WidgetPlacement::Left => {
+            let _ = start_button;
+            parent_rect.left + margin
+        }
+    };
+
+    adjust_for_occupied_widgets(
+        base_left,
+        placement,
+        module_width,
+        margin,
+        parent_rect,
+        occupied_rects,
+    )
+}
+
+fn adjust_for_occupied_widgets(
+    initial_left: i32,
+    placement: WidgetPlacement,
+    module_width: i32,
+    margin: i32,
+    parent_rect: &RECT,
+    occupied_rects: &[RECT],
+) -> i32 {
+    let min_left = parent_rect.left.max(0);
+    let max_left = (parent_rect.right - module_width).max(min_left);
+    let mut left = initial_left.clamp(min_left, max_left);
+
+    for _ in 0..occupied_rects.len().max(1) {
+        let Some(overlap) = occupied_rects
+            .iter()
+            .find(|rect| horizontal_overlap(left, module_width, rect))
+        else {
+            break;
+        };
+
+        left = match placement {
+            WidgetPlacement::Right => (overlap.left - module_width - margin).max(min_left),
+            WidgetPlacement::Left => (overlap.right + margin).min(max_left),
+        };
+    }
+
+    left.clamp(min_left, max_left)
+}
+
+fn collect_peer_widget_rects(hwnd: HWND, probe: &TaskbarProbe, parent_rect: &RECT) -> Vec<RECT> {
+    let mut rects = Vec::new();
+    let mut roots = vec![probe.shell_tray, probe.rebar, probe.task_switch, probe.host_parent];
+    roots.retain(|root| is_valid_window(*root));
+    roots.dedup_by(|a, b| a.0 == b.0);
+
+    for root in roots {
+        collect_peer_widget_rects_recursive(hwnd, root, parent_rect, &mut rects);
+    }
+
+    rects.sort_by_key(|rect| rect.left);
+    rects.dedup_by(|a, b| {
+        a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom
+    });
+    rects
+}
+
+fn collect_peer_widget_rects_recursive(
+    hwnd: HWND,
+    parent: HWND,
+    parent_rect: &RECT,
+    rects: &mut Vec<RECT>,
+) {
+    let mut child = HWND::default();
+    loop {
+        child = unsafe { FindWindowExW(parent, child, PCWSTR::null(), None).unwrap_or_default() };
+        if !is_valid_window(child) {
+            break;
+        }
+        if child != hwnd
+            && unsafe { IsWindowVisible(child).as_bool() }
+            && let Some(rect) = win32::rect_for_window(child)
+            && is_candidate_peer_widget(child, &rect, parent_rect)
+        {
+            rects.push(rect);
+        }
+        collect_peer_widget_rects_recursive(hwnd, child, parent_rect, rects);
+    }
+}
+
+fn is_candidate_peer_widget(hwnd: HWND, rect: &RECT, parent_rect: &RECT) -> bool {
+    if !rect_has_area(rect) {
+        return false;
+    }
+
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    let parent_width = parent_rect.right - parent_rect.left;
+    let parent_height = parent_rect.bottom - parent_rect.top;
+    if width <= 0 || width > 320 || width >= parent_width / 2 {
+        return false;
+    }
+    if height <= 0 || height < parent_height / 2 {
+        return false;
+    }
+    if rect.bottom <= parent_rect.top || rect.top >= parent_rect.bottom {
+        return false;
+    }
+
+    let class_name = window_class_name(hwnd);
+    !matches!(class_name.as_str(), "TaskbarWidgetWindow")
+}
+
+fn window_class_name(hwnd: HWND) -> String {
+    let mut buffer = [0u16; 256];
+    let length = unsafe { GetClassNameW(hwnd, &mut buffer) } as usize;
+    String::from_utf16_lossy(&buffer[..length])
+}
+
+fn horizontal_overlap(left: i32, width: i32, rect: &RECT) -> bool {
+    let right = left + width;
+    left < rect.right && right > rect.left
+}
+
+fn rect_has_area(rect: &RECT) -> bool {
+    rect.right > rect.left && rect.bottom > rect.top
 }
 
 fn enabled_group_count() -> usize {
@@ -972,4 +1129,63 @@ fn top_level_style_bits(style: isize) -> u32 {
         | WS_BORDER.0;
 
     (style as u32) & mask
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn right_placement_shifts_left_when_small_peer_overlaps() {
+        let parent_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 40,
+        };
+        let occupied = [RECT {
+            left: 372,
+            top: 0,
+            right: 432,
+            bottom: 40,
+        }];
+
+        let left = adjust_for_occupied_widgets(
+            412,
+            WidgetPlacement::Right,
+            80,
+            8,
+            &parent_rect,
+            &occupied,
+        );
+
+        assert_eq!(left, 284);
+    }
+
+    #[test]
+    fn left_placement_shifts_right_when_small_peer_overlaps() {
+        let parent_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 40,
+        };
+        let occupied = [RECT {
+            left: 56,
+            top: 0,
+            right: 116,
+            bottom: 40,
+        }];
+
+        let left = adjust_for_occupied_widgets(
+            48,
+            WidgetPlacement::Left,
+            80,
+            8,
+            &parent_rect,
+            &occupied,
+        );
+
+        assert_eq!(left, 124);
+    }
 }

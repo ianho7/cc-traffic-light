@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE_NAME: &str = "config.json";
-const CONFIG_SCHEMA_VERSION: u32 = 2;
+const CONFIG_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub monitoring: MonitoringConfig,
     #[serde(default)]
     pub appearance: AppearanceConfig,
+    #[serde(default)]
+    pub widget_visual: WidgetVisualConfig,
     #[serde(default)]
     pub diagnostics: DiagnosticsConfig,
 }
@@ -50,6 +52,34 @@ pub struct AppearanceConfig {
     pub widget_size: WidgetSize,
     pub show_labels: bool,
     pub reduced_motion: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WidgetVisualConfig {
+    #[serde(default)]
+    pub placement: WidgetPlacement,
+    #[serde(default)]
+    pub palette: WidgetPaletteConfig,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetPlacement {
+    Left,
+    #[default]
+    Right,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WidgetPaletteConfig {
+    #[serde(default = "default_widget_green")]
+    pub green: String,
+    #[serde(default = "default_widget_yellow")]
+    pub yellow: String,
+    #[serde(default = "default_widget_red")]
+    pub red: String,
+    #[serde(default = "default_widget_off")]
+    pub off: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -138,6 +168,7 @@ impl AppConfig {
                 show_labels: true,
                 reduced_motion: false,
             },
+            widget_visual: WidgetVisualConfig::default(),
             diagnostics: DiagnosticsConfig {
                 last_opened_page: SettingsPage::Overview,
                 last_manual_refresh_at: None,
@@ -175,6 +206,26 @@ impl Default for AppearanceConfig {
 impl Default for DiagnosticsConfig {
     fn default() -> Self {
         AppConfig::default_v1().diagnostics
+    }
+}
+
+impl Default for WidgetVisualConfig {
+    fn default() -> Self {
+        Self {
+            placement: WidgetPlacement::Right,
+            palette: WidgetPaletteConfig::default(),
+        }
+    }
+}
+
+impl Default for WidgetPaletteConfig {
+    fn default() -> Self {
+        Self {
+            green: default_widget_green(),
+            yellow: default_widget_yellow(),
+            red: default_widget_red(),
+            off: default_widget_off(),
+        }
     }
 }
 
@@ -253,6 +304,22 @@ fn strip_utf8_bom(value: &str) -> &str {
     value.strip_prefix('\u{feff}').unwrap_or(value)
 }
 
+fn default_widget_green() -> String {
+    "#52D671".to_string()
+}
+
+fn default_widget_yellow() -> String {
+    "#FFD24C".to_string()
+}
+
+fn default_widget_red() -> String {
+    "#FF6C60".to_string()
+}
+
+fn default_widget_off() -> String {
+    "#303034".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,7 +327,7 @@ mod tests {
     #[test]
     fn missing_localization_defaults_to_follow_system() {
         let config = serde_json::from_str::<AppConfig>(
-            r#"{
+            r##"{
                 "schema_version": 1,
                 "general": {
                     "autostart_enabled": false,
@@ -278,11 +345,19 @@ mod tests {
                     "show_labels": true,
                     "reduced_motion": false
                 },
+                "widget_visual": {
+                    "palette": {
+                        "green": "#52D671",
+                        "yellow": "#FFD24C",
+                        "red": "#FF6C60",
+                        "off": "#303034"
+                    }
+                },
                 "diagnostics": {
                     "last_opened_page": "overview",
                     "last_manual_refresh_at": null
                 }
-            }"#,
+            }"##,
         )
         .expect("config should deserialize");
 
@@ -318,5 +393,44 @@ mod tests {
         .expect("config should deserialize");
 
         assert_eq!(config.appearance.ui_theme, UiTheme::Dark);
+    }
+
+    #[test]
+    fn missing_widget_visual_defaults_to_phase1_palette() {
+        let config = serde_json::from_str::<AppConfig>(
+            r#"{
+                "schema_version": 2,
+                "appearance": {
+                    "ui_theme": "dark",
+                    "indicator_style": "classic",
+                    "widget_size": "standard",
+                    "show_labels": true,
+                    "reduced_motion": false
+                }
+            }"#,
+        )
+        .expect("config should deserialize");
+
+        assert_eq!(config.widget_visual.palette.green, "#52D671");
+        assert_eq!(config.widget_visual.palette.yellow, "#FFD24C");
+        assert_eq!(config.widget_visual.palette.red, "#FF6C60");
+        assert_eq!(config.widget_visual.palette.off, "#303034");
+        assert_eq!(config.widget_visual.placement, WidgetPlacement::Right);
+    }
+
+    #[test]
+    fn widget_visual_round_trip_preserves_custom_palette() {
+        let mut config = AppConfig::default_v1();
+        config.widget_visual.placement = WidgetPlacement::Left;
+        config.widget_visual.palette.green = "#00FF88".to_string();
+        config.widget_visual.palette.yellow = "#FFD700".to_string();
+        config.widget_visual.palette.red = "#FF4D6D".to_string();
+        config.widget_visual.palette.off = "#24262A".to_string();
+
+        let encoded = serde_json::to_string(&config).expect("config should serialize");
+        let decoded =
+            serde_json::from_str::<AppConfig>(&encoded).expect("config should deserialize");
+
+        assert_eq!(decoded.widget_visual, config.widget_visual);
     }
 }

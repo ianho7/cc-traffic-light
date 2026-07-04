@@ -489,6 +489,31 @@ button {
   word-break: break-all;
 }
 
+.color-setting-row {
+  cursor: default;
+}
+
+.color-setting-value {
+  gap: 12px;
+}
+
+.color-chip {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.08);
+}
+
+.color-input {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .trace-list {
   display: grid;
 }

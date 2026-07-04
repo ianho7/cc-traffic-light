@@ -309,6 +309,21 @@ fn changed_keys(previous: &AppConfig, next: &AppConfig) -> Vec<String> {
     if previous.appearance.reduced_motion != next.appearance.reduced_motion {
         keys.push("appearance.reduced_motion".to_string());
     }
+    if previous.widget_visual.palette.green != next.widget_visual.palette.green {
+        keys.push("widget_visual.palette.green".to_string());
+    }
+    if previous.widget_visual.placement != next.widget_visual.placement {
+        keys.push("widget_visual.placement".to_string());
+    }
+    if previous.widget_visual.palette.yellow != next.widget_visual.palette.yellow {
+        keys.push("widget_visual.palette.yellow".to_string());
+    }
+    if previous.widget_visual.palette.red != next.widget_visual.palette.red {
+        keys.push("widget_visual.palette.red".to_string());
+    }
+    if previous.widget_visual.palette.off != next.widget_visual.palette.off {
+        keys.push("widget_visual.palette.off".to_string());
+    }
     if previous.diagnostics.last_opened_page != next.diagnostics.last_opened_page {
         keys.push("diagnostics.last_opened_page".to_string());
     }

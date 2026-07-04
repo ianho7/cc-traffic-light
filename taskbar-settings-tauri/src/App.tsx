@@ -71,6 +71,18 @@ type LocaleStrings = {
     codex: string;
     claude: string;
   };
+  appearance: {
+    title: string;
+    note: string;
+    placement: string;
+    placementLeft: string;
+    placementRight: string;
+    green: string;
+    yellow: string;
+    red: string;
+    off: string;
+    reset: string;
+  };
   diagnostics: {
     title: string;
     note: string;
@@ -142,14 +154,14 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         description: "决定哪些本地来源参与交通灯状态判断。"
       },
       appearance: {
-        index: "00",
+        index: "04",
         title: "外观",
         label: "APPEARANCE",
-        kicker: "Hidden",
-        description: "legacy hidden page"
+        kicker: "Widget Palette",
+        description: "只暴露第一阶段默认圆灯配色，实时驱动任务栏 widget 重绘。"
       },
       diagnostics: {
-        index: "04",
+        index: "05",
         title: "诊断",
         label: "DIAGNOSTICS",
         kicker: "Recent Events",
@@ -195,6 +207,18 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
       note: "保留 Codex 与 Claude Code 两个来源",
       codex: "监听 Codex",
       claude: "监听 Claude Code"
+    },
+    appearance: {
+      title: "Widget Palette",
+      note: "第一阶段只允许调整默认圆灯配色，不引入背景色或图片资源",
+      placement: "停靠位置",
+      placementLeft: "左侧",
+      placementRight: "右侧",
+      green: "绿色灯",
+      yellow: "黄色灯",
+      red: "红色灯",
+      off: "熄灭灯",
+      reset: "恢复默认配色"
     },
     diagnostics: {
       title: "Recent Events",
@@ -299,14 +323,14 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         description: "Decide which local sources contribute to the traffic-light state."
       },
       appearance: {
-        index: "00",
+        index: "04",
         title: "Appearance",
         label: "APPEARANCE",
-        kicker: "Hidden",
-        description: "legacy hidden page"
+        kicker: "Widget Palette",
+        description: "Expose only the phase-1 round-lamp palette and repaint the widget live."
       },
       diagnostics: {
-        index: "04",
+        index: "05",
         title: "Diagnostics",
         label: "DIAGNOSTICS",
         kicker: "Recent Events",
@@ -352,6 +376,18 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
       note: "Keep Codex and Claude Code as the only two monitored sources",
       codex: "Listen to Codex",
       claude: "Listen to Claude Code"
+    },
+    appearance: {
+      title: "Widget Palette",
+      note: "Phase 1 only changes the default round-lamp colors. No background or image support yet.",
+      placement: "Dock side",
+      placementLeft: "Left",
+      placementRight: "Right",
+      green: "Green lamp",
+      yellow: "Yellow lamp",
+      red: "Red lamp",
+      off: "Off lamp",
+      reset: "Restore default palette"
     },
     diagnostics: {
       title: "Recent Events",
@@ -788,6 +824,115 @@ function App() {
             </div>
           ) : null}
 
+          {page === "appearance" ? (
+            <div className="page-body">
+              <Section note={strings.appearance.note} title={strings.appearance.title}>
+                <SettingRow
+                  keyLabel="WIDGET_PLACEMENT"
+                  label={strings.appearance.placement}
+                  onPress={() =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.placement =
+                          draft.widget_visual.placement === "right" ? "left" : "right";
+                      },
+                      ["widget_visual.placement"]
+                    )
+                  }
+                  pending={pending}
+                  value={
+                    <ValuePill
+                      text={
+                        settings.widget_visual.placement === "right"
+                          ? strings.appearance.placementRight
+                          : strings.appearance.placementLeft
+                      }
+                    />
+                  }
+                />
+                <ColorSettingRow
+                  keyLabel="WIDGET_GREEN"
+                  label={strings.appearance.green}
+                  onChange={(value) =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.palette.green = value;
+                      },
+                      ["widget_visual.palette.green"]
+                    )
+                  }
+                  pending={pending}
+                  value={settings.widget_visual.palette.green}
+                />
+                <ColorSettingRow
+                  keyLabel="WIDGET_YELLOW"
+                  label={strings.appearance.yellow}
+                  onChange={(value) =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.palette.yellow = value;
+                      },
+                      ["widget_visual.palette.yellow"]
+                    )
+                  }
+                  pending={pending}
+                  value={settings.widget_visual.palette.yellow}
+                />
+                <ColorSettingRow
+                  keyLabel="WIDGET_RED"
+                  label={strings.appearance.red}
+                  onChange={(value) =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.palette.red = value;
+                      },
+                      ["widget_visual.palette.red"]
+                    )
+                  }
+                  pending={pending}
+                  value={settings.widget_visual.palette.red}
+                />
+                <ColorSettingRow
+                  keyLabel="WIDGET_OFF"
+                  label={strings.appearance.off}
+                  onChange={(value) =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.palette.off = value;
+                      },
+                      ["widget_visual.palette.off"]
+                    )
+                  }
+                  pending={pending}
+                  value={settings.widget_visual.palette.off}
+                />
+              </Section>
+
+              <div className="action-row">
+                <button
+                  className="action-button"
+                  disabled={pending}
+                  onClick={() =>
+                    updateConfig(
+                      (draft) => {
+                        draft.widget_visual.palette = defaultWidgetPalette();
+                      },
+                      [
+                        "widget_visual.palette.green",
+                        "widget_visual.palette.yellow",
+                        "widget_visual.palette.red",
+                        "widget_visual.palette.off"
+                      ]
+                    )
+                  }
+                  type="button"
+                >
+                  {strings.appearance.reset}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {page === "diagnostics" ? (
             <div className="page-body">
               <Section note={strings.diagnostics.note} title={strings.diagnostics.title}>
@@ -868,7 +1013,14 @@ function App() {
   );
 }
 
-const VISIBLE_PAGE_IDS: SettingsPageId[] = ["overview", "general", "monitoring", "diagnostics", "about"];
+const VISIBLE_PAGE_IDS: SettingsPageId[] = [
+  "overview",
+  "general",
+  "monitoring",
+  "appearance",
+  "diagnostics",
+  "about"
+];
 
 function buildPages(strings: LocaleStrings) {
   return VISIBLE_PAGE_IDS.map((id) => {
@@ -992,6 +1144,42 @@ function InfoRow(props: {
   );
 }
 
+function ColorSettingRow(props: {
+  label: string;
+  keyLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  pending?: boolean;
+}) {
+  const normalizedValue = normalizeHexColor(props.value);
+
+  return (
+    <label className="setting-row color-setting-row">
+      <div>
+        <p className="row-title">{props.label}</p>
+        <p className="row-key">{props.keyLabel}</p>
+      </div>
+      <div className="row-value color-setting-value">
+        <span
+          aria-hidden="true"
+          className="color-chip"
+          style={{ backgroundColor: normalizedValue }}
+        />
+        <input
+          className="color-input"
+          disabled={props.pending}
+          onChange={(event) => {
+            props.onChange(event.currentTarget.value.toUpperCase());
+          }}
+          type="color"
+          value={normalizedValue}
+        />
+        <ValuePill text={normalizedValue.toUpperCase()} />
+      </div>
+    </label>
+  );
+}
+
 function TogglePill(props: { on: boolean; text: string }) {
   return (
     <span className={props.on ? "toggle-pill on" : "toggle-pill"}>
@@ -1078,6 +1266,19 @@ function formatTimestamp(
 
 function compactText(value: string) {
   return value.length > 56 ? `${value.slice(0, 53)}...` : value;
+}
+
+function defaultWidgetPalette() {
+  return {
+    green: "#52D671",
+    yellow: "#FFD24C",
+    red: "#FF6C60",
+    off: "#303034"
+  };
+}
+
+function normalizeHexColor(value: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000";
 }
 
 export default App;

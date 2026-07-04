@@ -45,6 +45,15 @@ export interface AppConfig {
     show_labels: boolean;
     reduced_motion: boolean;
   };
+  widget_visual: {
+    placement: "left" | "right";
+    palette: {
+      green: string;
+      yellow: string;
+      red: string;
+      off: string;
+    };
+  };
   diagnostics: {
     last_opened_page: SettingsPageId;
     last_manual_refresh_at: number | null;
