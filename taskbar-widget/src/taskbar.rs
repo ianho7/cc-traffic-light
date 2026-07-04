@@ -17,6 +17,7 @@ use windows::{
 };
 
 use crate::win32;
+use crate::settings_bridge;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ParentStrategy {
@@ -599,7 +600,12 @@ pub fn position_in_taskbar(
     let parent_height = (parent_client_rect.bottom - parent_client_rect.top)
         .max(parent_rect.bottom - parent_rect.top)
         .max(1);
-    let module_width = 160.min(parent_width.max(1));
+    let enabled_group_count = enabled_group_count();
+    let module_width = match enabled_group_count {
+        0 => 0,
+        1 => 80.min(parent_width.max(1)),
+        _ => 160.min(parent_width.max(1)),
+    };
     let margin = 8;
 
     let desired_screen_left = if is_valid_window(anchor) {
@@ -639,7 +645,11 @@ pub fn position_in_taskbar(
         }
     };
 
-    let moved = unsafe { MoveWindow(hwnd, x, y, width, height, true).is_ok() };
+    let moved = if module_width > 0 {
+        unsafe { MoveWindow(hwnd, x, y, width, height, true).is_ok() }
+    } else {
+        false
+    };
     let module_rect = win32::rect_for_window(hwnd).unwrap_or(RECT {
         left: parent_rect.left + x,
         top: parent_rect.top + y,
@@ -677,6 +687,11 @@ pub fn position_in_taskbar(
     }
 
     result
+}
+
+fn enabled_group_count() -> usize {
+    let config = settings_bridge::current_config();
+    usize::from(config.monitoring.codex_enabled) + usize::from(config.monitoring.claude_enabled)
 }
 
 pub fn log_layout(result: &TaskbarLayoutResult) {

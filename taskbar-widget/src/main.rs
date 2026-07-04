@@ -57,6 +57,7 @@ struct PaintState {
 struct SourcePaintStyle {
     label: &'static str,
     state: SourceVisualState,
+    visible: bool,
     green: RECT,
     yellow: RECT,
     red: RECT,
@@ -66,8 +67,9 @@ struct WidgetPaintStyle {
     background: COLORREF,
     divider: COLORREF,
     label: COLORREF,
-    codex: SourcePaintStyle,
-    claude: SourcePaintStyle,
+    codex: Option<SourcePaintStyle>,
+    claude: Option<SourcePaintStyle>,
+    show_divider: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -489,19 +491,25 @@ fn paint_window(hwnd: HWND) -> LRESULT {
 
         let divider_pen = CreatePen(PS_NULL, 0, style.divider);
         let _ = SelectObject(hdc, divider_pen);
-        let divider_rect = RECT {
-            left: client_rect.left + ((client_rect.right - client_rect.left) / 2) - 1,
-            top: client_rect.top + 7,
-            right: client_rect.left + ((client_rect.right - client_rect.left) / 2) + 1,
-            bottom: client_rect.bottom - 7,
-        };
         let divider_brush = CreateSolidBrush(style.divider);
-        let _ = FillRect(hdc, &divider_rect, divider_brush);
+        if style.show_divider {
+            let divider_rect = RECT {
+                left: client_rect.left + ((client_rect.right - client_rect.left) / 2) - 1,
+                top: client_rect.top + 7,
+                right: client_rect.left + ((client_rect.right - client_rect.left) / 2) + 1,
+                bottom: client_rect.bottom - 7,
+            };
+            let _ = FillRect(hdc, &divider_rect, divider_brush);
+        }
 
         let _ = SetBkMode(hdc, TRANSPARENT);
         let _ = SetTextColor(hdc, style.label);
-        paint_source_group(hdc, &style.codex);
-        paint_source_group(hdc, &style.claude);
+        if let Some(codex) = &style.codex {
+            paint_source_group(hdc, codex);
+        }
+        if let Some(claude) = &style.claude {
+            paint_source_group(hdc, claude);
+        }
 
         let _ = DeleteObject(divider_pen);
         let _ = DeleteObject(divider_brush);
@@ -518,66 +526,87 @@ fn paint_window(hwnd: HWND) -> LRESULT {
 }
 
 fn paint_style(snapshot: &AppStatusSnapshot, rect: &RECT) -> WidgetPaintStyle {
+    let config = settings_bridge::current_config();
     let width = rect.right - rect.left;
-    let half = width / 2;
+    let left_group_left = rect.left + 16;
+    let right_group_left = rect.left + (width / 2) + 16;
+    let centered_group_left = rect.left + ((width - 37) / 2);
     let top = rect.top;
+
+    let codex_enabled = config.monitoring.codex_enabled;
+    let claude_enabled = config.monitoring.claude_enabled;
+    let show_divider = codex_enabled && claude_enabled;
+
+    let codex_left = if codex_enabled && !claude_enabled {
+        centered_group_left
+    } else {
+        left_group_left
+    };
+    let claude_left = if claude_enabled && !codex_enabled {
+        centered_group_left
+    } else {
+        right_group_left
+    };
 
     WidgetPaintStyle {
         background: rgb(14, 14, 16),
         divider: rgb(58, 58, 64),
         label: rgb(228, 228, 232),
-        codex: SourcePaintStyle {
+        codex: codex_enabled.then(|| SourcePaintStyle {
             label: "C",
             state: snapshot
                 .sources
                 .get("codex")
                 .map(|source| source.state)
                 .unwrap_or(SourceVisualState::Idle),
+            visible: true,
             green: RECT {
-                left: rect.left + 16,
+                left: codex_left,
                 top: top + 20,
-                right: rect.left + 25,
+                right: codex_left + 9,
                 bottom: top + 29,
             },
             yellow: RECT {
-                left: rect.left + 30,
+                left: codex_left + 14,
                 top: top + 20,
-                right: rect.left + 39,
+                right: codex_left + 23,
                 bottom: top + 29,
             },
             red: RECT {
-                left: rect.left + 44,
+                left: codex_left + 28,
                 top: top + 20,
-                right: rect.left + 53,
+                right: codex_left + 37,
                 bottom: top + 29,
             },
-        },
-        claude: SourcePaintStyle {
+        }),
+        claude: claude_enabled.then(|| SourcePaintStyle {
             label: "L",
             state: snapshot
                 .sources
                 .get("claude")
                 .map(|source| source.state)
                 .unwrap_or(SourceVisualState::Idle),
+            visible: true,
             green: RECT {
-                left: rect.left + half + 16,
+                left: claude_left,
                 top: top + 20,
-                right: rect.left + half + 25,
+                right: claude_left + 9,
                 bottom: top + 29,
             },
             yellow: RECT {
-                left: rect.left + half + 30,
+                left: claude_left + 14,
                 top: top + 20,
-                right: rect.left + half + 39,
+                right: claude_left + 23,
                 bottom: top + 29,
             },
             red: RECT {
-                left: rect.left + half + 44,
+                left: claude_left + 28,
                 top: top + 20,
-                right: rect.left + half + 53,
+                right: claude_left + 37,
                 bottom: top + 29,
             },
-        },
+        }),
+        show_divider,
     }
 }
 
@@ -670,6 +699,7 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                 ));
             }
             poll_hook_state(hwnd);
+            relayout_widget(hwnd);
         }
         tray_icon::TrayAction::Exit => {}
     }
@@ -734,21 +764,32 @@ fn sync_widget_visibility(
     layout: &taskbar::TaskbarLayoutResult,
     debug_config: &DebugLoopConfig,
 ) {
+    let config = settings_bridge::current_config();
+    let has_visible_group = config.monitoring.codex_enabled || config.monitoring.claude_enabled;
     let (mount_state, _) = current_widget_runtime_state();
     unsafe {
         let _ = ShowWindow(
             hwnd,
-            if mount_state == WidgetMountState::Attached {
+            if mount_state == WidgetMountState::Attached && has_visible_group {
                 SW_SHOW
             } else {
                 SW_HIDE
             },
         );
     }
-    if mount_state == WidgetMountState::Attached {
+    if mount_state == WidgetMountState::Attached && has_visible_group && layout.width > 0 {
         set_runtime_stage("refresh_visibility");
         taskbar::refresh_visibility(hwnd, layout, debug_config);
     }
+}
+
+fn relayout_widget(hwnd: HWND) {
+    let Some(debug_config) = DEBUG_CONFIG.get() else {
+        return;
+    };
+    let probe = probe_taskbar(debug_config);
+    let layout = taskbar::position_in_taskbar(hwnd, &probe, debug_config);
+    sync_widget_visibility(hwnd, &layout, debug_config);
 }
 
 fn attempt_widget_recovery(hwnd: HWND) {
@@ -847,6 +888,9 @@ fn tray_command_from_wparam(wparam: WPARAM) -> Option<tray_icon::TrayAction> {
 }
 
 fn paint_source_group(hdc: windows::Win32::Graphics::Gdi::HDC, style: &SourcePaintStyle) {
+    if !style.visible {
+        return;
+    }
     draw_group_label(hdc, style.label, style.green.left - 8, style.green.top - 10);
     draw_light(hdc, style.green, lamp_fill(style.state, 0));
     draw_light(hdc, style.yellow, lamp_fill(style.state, 1));

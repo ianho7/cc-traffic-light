@@ -72,6 +72,7 @@ pub fn update_snapshot(snapshot: AppStatusSnapshot) {
         *current = snapshot;
     }
 
+    invalidate_main_window();
     invalidate_fallback_window();
 }
 
@@ -103,6 +104,7 @@ where
     HostSettingsBridge::new()
         .save_settings(&config)
         .map_err(service_error_to_string)?;
+    invalidate_main_window();
     invalidate_fallback_window();
     Ok(config.clone())
 }
@@ -136,6 +138,7 @@ pub fn toggle_autostart_setting() -> Result<AppConfig, String> {
     HostSettingsBridge::new()
         .save_settings(&config)
         .map_err(service_error_to_string)?;
+    invalidate_main_window();
     invalidate_fallback_window();
     Ok(config.clone())
 }
@@ -183,6 +186,7 @@ pub fn apply_full_settings(next: AppConfig) -> Result<SettingsSaveResultDto, Str
     HostSettingsBridge::new()
         .save_settings(&config)
         .map_err(service_error_to_string)?;
+    invalidate_main_window();
     invalidate_fallback_window();
 
     Ok(SettingsSaveResultDto {
@@ -225,6 +229,14 @@ fn current_settings_window_hwnd() -> Option<HWND> {
 
 fn invalidate_fallback_window() {
     if let Some(hwnd) = current_settings_window_hwnd() {
+        unsafe {
+            let _ = InvalidateRect(hwnd, None, true);
+        }
+    }
+}
+
+fn invalidate_main_window() {
+    if let Some(hwnd) = current_main_hwnd() {
         unsafe {
             let _ = InvalidateRect(hwnd, None, true);
         }
