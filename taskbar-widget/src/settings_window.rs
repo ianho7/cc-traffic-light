@@ -1,10 +1,6 @@
-use std::sync::{Mutex, OnceLock};
-
-use crate::autostart;
-use crate::win32;
+use crate::{settings_bridge, win32};
 use taskbar_widget::{
-    agent_state,
-    app_config::{self, AppConfig, SettingsPage},
+    app_config::{AppConfig, SettingsPage},
     ui_state::AppStatusSnapshot,
 };
 use windows::{
@@ -30,11 +26,6 @@ const SETTINGS_CLASS_NAME: windows::core::PCWSTR = w!("CcTrafficLightSettingsWin
 const SETTINGS_TITLE: windows::core::PCWSTR = w!("CC Traffic Light Settings");
 const SETTINGS_WIDTH: i32 = 720;
 const SETTINGS_HEIGHT: i32 = 460;
-
-static SETTINGS_SNAPSHOT: OnceLock<Mutex<AppStatusSnapshot>> = OnceLock::new();
-static SETTINGS_CONFIG: OnceLock<Mutex<AppConfig>> = OnceLock::new();
-static MAIN_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
-static SETTINGS_WINDOW_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 
 const NAV_ITEMS: [(SettingsPage, &str); 6] = [
     (SettingsPage::Overview, "OVERVIEW"),
@@ -63,8 +54,7 @@ pub fn create_window(
     config: AppConfig,
 ) -> Result<HWND> {
     register_window_class(hinstance)?;
-    let _ = SETTINGS_SNAPSHOT.set(Mutex::new(snapshot));
-    let _ = SETTINGS_CONFIG.set(Mutex::new(config));
+    settings_bridge::initialize(snapshot, config);
 
     let hwnd = unsafe {
         CreateWindowExW(
@@ -86,16 +76,9 @@ pub fn create_window(
     unsafe {
         let _ = ShowWindow(hwnd, SW_HIDE);
     }
-    let _ = SETTINGS_WINDOW_HWND.set(Mutex::new(hwnd.0 as isize));
+    settings_bridge::register_settings_window(hwnd);
 
     Ok(hwnd)
-}
-
-pub fn bind_main_window(hwnd: HWND) {
-    let lock = MAIN_HWND.get_or_init(|| Mutex::new(0));
-    if let Ok(mut current) = lock.lock() {
-        *current = hwnd.0 as isize;
-    }
 }
 
 pub fn show_window(hwnd: HWND) {
@@ -112,22 +95,11 @@ pub fn hide_window(hwnd: HWND) {
 }
 
 pub fn update_snapshot(hwnd: HWND, snapshot: AppStatusSnapshot) {
-    if let Some(lock) = SETTINGS_SNAPSHOT.get()
-        && let Ok(mut current) = lock.lock()
-    {
-        *current = snapshot;
-    }
+    settings_bridge::update_snapshot(snapshot);
 
     unsafe {
         let _ = windows::Win32::Graphics::Gdi::InvalidateRect(hwnd, None, true);
     }
-}
-
-pub fn current_snapshot() -> AppStatusSnapshot {
-    SETTINGS_SNAPSHOT
-        .get()
-        .and_then(|snapshot| snapshot.lock().ok().map(|snapshot| snapshot.clone()))
-        .unwrap_or_else(AppStatusSnapshot::empty)
 }
 
 pub unsafe extern "system" fn window_proc(
@@ -172,12 +144,7 @@ fn register_window_class(hinstance: HINSTANCE) -> Result<()> {
 }
 
 fn paint_window(hwnd: HWND) -> LRESULT {
-    let snapshot = SETTINGS_SNAPSHOT
-        .get()
-        .and_then(|state: &Mutex<AppStatusSnapshot>| {
-            state.lock().ok().map(|snapshot| snapshot.clone())
-        })
-        .unwrap_or_else(AppStatusSnapshot::empty);
+    let snapshot = settings_bridge::current_snapshot();
     let config = current_config();
 
     let mut paint = PAINTSTRUCT::default();
@@ -839,91 +806,27 @@ where
 }
 
 fn toggle_autostart(hwnd: HWND) {
-    let Some(lock) = SETTINGS_CONFIG.get() else {
-        return;
-    };
-    let Ok(mut config) = lock.lock() else {
-        return;
-    };
-
-    let next_enabled = !config.general.autostart_enabled;
-    if autostart::set_enabled(next_enabled).is_err() {
+    if settings_bridge::toggle_autostart_setting().is_err() {
         return;
     }
-
-    config.general.autostart_enabled = next_enabled;
-    let _ = app_config::save_config(&config);
     unsafe {
         let _ = windows::Win32::Graphics::Gdi::InvalidateRect(hwnd, None, true);
     }
 }
 
 pub fn current_config() -> AppConfig {
-    SETTINGS_CONFIG
-        .get()
-        .and_then(|config| config.lock().ok().map(|config| config.clone()))
-        .unwrap_or_else(AppConfig::default_v1)
+    settings_bridge::current_config()
 }
 
 pub fn update_config<F>(mutate: F) -> std::result::Result<AppConfig, String>
 where
     F: FnOnce(&mut AppConfig),
 {
-    let Some(lock) = SETTINGS_CONFIG.get() else {
-        return Err("settings config store unavailable".to_string());
-    };
-    let Ok(mut config) = lock.lock() else {
-        return Err("settings config lock poisoned".to_string());
-    };
-    mutate(&mut config);
-    app_config::save_config(&config).map_err(|error| error.to_string())?;
-    invalidate_fallback_window();
-    Ok(config.clone())
-}
-
-pub fn toggle_autostart_setting() -> std::result::Result<AppConfig, String> {
-    let Some(lock) = SETTINGS_CONFIG.get() else {
-        return Err("settings config store unavailable".to_string());
-    };
-    let Ok(mut config) = lock.lock() else {
-        return Err("settings config lock poisoned".to_string());
-    };
-
-    let next_enabled = !config.general.autostart_enabled;
-    autostart::set_enabled(next_enabled).map_err(|error| error.to_string())?;
-    config.general.autostart_enabled = next_enabled;
-    app_config::save_config(&config).map_err(|error| error.to_string())?;
-    invalidate_fallback_window();
-    Ok(config.clone())
-}
-
-pub fn cycle_language_setting() -> std::result::Result<AppConfig, String> {
-    update_config(|config| {
-        config.localization.language = match config.localization.language {
-            app_config::AppLanguage::FollowSystem => app_config::AppLanguage::ZhCn,
-            app_config::AppLanguage::ZhCn => app_config::AppLanguage::En,
-            app_config::AppLanguage::En => app_config::AppLanguage::FollowSystem,
-        };
-    })
+    settings_bridge::update_config(mutate)
 }
 
 pub fn request_manual_refresh_command() -> std::result::Result<AppConfig, String> {
-    let config = update_config(|config| {
-        config.diagnostics.last_manual_refresh_at = Some(agent_state::now_ms());
-    })?;
-
-    let Some(main_hwnd) = current_main_hwnd() else {
-        return Err("main window unavailable for refresh command".to_string());
-    };
-    unsafe {
-        let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
-            main_hwnd,
-            windows::Win32::UI::WindowsAndMessaging::WM_COMMAND,
-            WPARAM(usize::from(crate::tray_icon::TRAY_CMD_REFRESH)),
-            LPARAM(0),
-        );
-    }
-    Ok(config)
+    settings_bridge::request_manual_refresh_command()
 }
 
 fn request_manual_refresh(hwnd: HWND) {
@@ -1085,31 +988,4 @@ fn window_style() -> windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE {
 
 fn window_ex_style() -> WINDOW_EX_STYLE {
     WS_EX_APPWINDOW | WS_EX_TOOLWINDOW
-}
-
-fn current_main_hwnd() -> Option<HWND> {
-    MAIN_HWND
-        .get()
-        .and_then(|lock| {
-            lock.lock()
-                .ok()
-                .map(|value| HWND(*value as *mut std::ffi::c_void))
-        })
-        .filter(|hwnd| hwnd.0 != std::ptr::null_mut())
-}
-
-fn invalidate_fallback_window() {
-    let hwnd = SETTINGS_WINDOW_HWND
-        .get()
-        .and_then(|lock| {
-            lock.lock()
-                .ok()
-                .map(|value| HWND(*value as *mut std::ffi::c_void))
-        })
-        .filter(|hwnd| hwnd.0 != std::ptr::null_mut());
-    if let Some(hwnd) = hwnd {
-        unsafe {
-            let _ = windows::Win32::Graphics::Gdi::InvalidateRect(hwnd, None, true);
-        }
-    }
 }

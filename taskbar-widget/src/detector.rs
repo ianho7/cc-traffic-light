@@ -5,7 +5,7 @@ use crate::{
     app_config::AppConfig,
     ui_state::{
         AppStatusSnapshot, DetectionMethod, SourceConfidence, SourceId, SourceStatus,
-        SourceVisualState, WidgetMountState,
+        SourceVisualState, WidgetMountState, hook_visual_state_from_agent_state,
     },
 };
 use windows::Win32::System::Diagnostics::ToolHelp::{
@@ -240,7 +240,7 @@ impl SourceObservation {
         Self {
             source_id,
             kind,
-            state: SourceVisualState::from_hook_state(&summary.state, summary.has_stale),
+            state: hook_visual_state_from_agent_state(&summary.state, summary.has_stale),
             confidence: confidence_from_hook_summary(summary),
             updated_at: summary.updated_at,
             message: summary.highest_priority_task.clone(),

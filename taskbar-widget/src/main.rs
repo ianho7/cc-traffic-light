@@ -1,7 +1,10 @@
 mod autostart;
+mod settings_bridge;
+mod settings_process;
 mod settings_slint;
 mod settings_window;
 mod taskbar;
+mod tauri_settings_ipc;
 mod tray_icon;
 mod win32;
 
@@ -149,7 +152,8 @@ fn main() -> Result<()> {
         AppStatusSnapshot::empty(),
         config_result.config.clone(),
     )?;
-    settings_window::bind_main_window(hwnd);
+    settings_bridge::bind_main_window(hwnd);
+    tauri_settings_ipc::ensure_server_started();
     store_settings_hwnd(settings_hwnd);
     initialize_slint_settings(AppStatusSnapshot::empty(), config_result.config.clone());
 
@@ -176,7 +180,11 @@ fn main() -> Result<()> {
     set_runtime_stage("initialize_paint_state");
     initialize_paint_state();
     sync_settings_hosts();
-    tray_icon::add_tray_icon(hwnd, &settings_window::current_config())?;
+    if let Err(error) = tray_icon::add_tray_icon(hwnd, &settings_bridge::current_config()) {
+        runtime_log(&format!(
+            "tray icon add failed; continuing without tray icon: {error}"
+        ));
+    }
     unsafe {
         let timer = SetTimer(hwnd, HOOK_STATE_TIMER_ID, HOOK_STATE_TIMER_MS, None);
         if timer == 0 {
@@ -300,7 +308,7 @@ unsafe extern "system" fn window_proc(
         }
         tray_icon::TRAY_CALLBACK_MESSAGE => {
             if let Some(action) =
-                tray_icon::handle_callback(hwnd, wparam, lparam, &settings_window::current_config())
+                tray_icon::handle_callback(hwnd, wparam, lparam, &settings_bridge::current_config())
             {
                 handle_tray_action(hwnd, action);
             }
@@ -325,6 +333,7 @@ unsafe extern "system" fn window_proc(
             win32::debug_log("WM_DESTROY received");
             tray_icon::remove_tray_icon(hwnd);
             settings_slint::shutdown();
+            settings_process::shutdown_managed_tauri_settings();
             runtime_log(&format!(
                 "WM_DESTROY received hwnd={}",
                 win32::format_hwnd(hwnd)
@@ -457,7 +466,7 @@ fn poll_hook_state(hwnd: HWND) {
         let mut effective_snapshot = next_snapshot;
         effective_snapshot.last_widget_attach_at = snapshot.last_widget_attach_at;
         *snapshot = effective_snapshot.clone();
-        tray_icon::sync_tray_state(hwnd, &snapshot, &settings_window::current_config());
+        tray_icon::sync_tray_state(hwnd, &snapshot, &settings_bridge::current_config());
     }
     sync_settings_hosts();
 }
@@ -628,8 +637,17 @@ fn display_snapshot_changed(current: &AppStatusSnapshot, next: &AppStatusSnapsho
 fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
     match action {
         tray_icon::TrayAction::OpenSettings => {
+            match settings_process::open_or_focus_tauri_settings() {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    runtime_log(&format!(
+                        "tauri settings open failed; falling back to slint: {error}"
+                    ));
+                }
+            }
             let snapshot = current_app_status_snapshot();
-            let config = settings_window::current_config();
+            let config = settings_bridge::current_config();
             if show_slint_settings(&snapshot, &config) {
                 if let Some(hwnd) = current_settings_hwnd() {
                     settings_window::hide_window(hwnd);
@@ -811,8 +829,14 @@ fn show_slint_settings(snapshot: &AppStatusSnapshot, config: &app_config::AppCon
 }
 
 fn sync_settings_hosts() {
-    let snapshot = current_app_status_snapshot();
-    let config = settings_window::current_config();
+    let read_model = settings_bridge::read_model().ok();
+    let snapshot = read_model
+        .as_ref()
+        .map(|model| model.snapshot.clone())
+        .unwrap_or_else(current_app_status_snapshot);
+    let config = read_model
+        .map(|model| model.config)
+        .unwrap_or_else(settings_bridge::current_config);
 
     if settings_slint::is_available() {
         let _ = settings_slint::update(&snapshot, &config);

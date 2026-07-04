@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
-use crate::{settings_window, win32};
+use crate::{settings_bridge, win32};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use slint::{CloseRequestResponse, ComponentHandle, PlatformError};
+use slint::{Brush, CloseRequestResponse, Color, ComponentHandle, PlatformError};
 use taskbar_widget::{
     app_config::{AppConfig, IndicatorStyle, SettingsPage, UiTheme, WidgetSize, config_file_path},
     i18n::Localizer,
@@ -104,7 +104,7 @@ fn bind_callbacks(window: &SettingsWindow) {
         let weak = weak.clone();
         move |page| {
             runtime_log(&format!("callback select_page page={page}"));
-            let result = settings_window::update_config(|config| {
+            let result = settings_bridge::update_config(|config| {
                 config.diagnostics.last_opened_page = page_from_index(page);
             });
             apply_backend_result(&weak, result);
@@ -114,7 +114,7 @@ fn bind_callbacks(window: &SettingsWindow) {
         let weak = weak.clone();
         move || {
             runtime_log("callback toggle_autostart");
-            apply_backend_result(&weak, settings_window::toggle_autostart_setting());
+            apply_backend_result(&weak, settings_bridge::toggle_autostart_setting());
         }
     });
     window.on_toggle_start_minimized({
@@ -123,7 +123,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_start_minimized");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.general.start_minimized_to_tray =
                         !config.general.start_minimized_to_tray;
                 }),
@@ -136,7 +136,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_close_to_tray");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.general.close_to_tray = !config.general.close_to_tray;
                 }),
             );
@@ -146,14 +146,14 @@ fn bind_callbacks(window: &SettingsWindow) {
         let weak = weak.clone();
         move || {
             runtime_log("callback cycle_language");
-            apply_backend_result(&weak, settings_window::cycle_language_setting());
+            apply_backend_result(&weak, settings_bridge::cycle_language_setting());
         }
     });
     window.on_request_refresh({
         let weak = weak.clone();
         move || {
             runtime_log("callback request_refresh");
-            apply_backend_result(&weak, settings_window::request_manual_refresh_command());
+            apply_backend_result(&weak, settings_bridge::request_manual_refresh_command());
         }
     });
     window.on_toggle_monitoring_codex({
@@ -162,7 +162,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_monitoring_codex");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.monitoring.codex_enabled = !config.monitoring.codex_enabled;
                 }),
             );
@@ -174,7 +174,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_monitoring_claude");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.monitoring.claude_enabled = !config.monitoring.claude_enabled;
                 }),
             );
@@ -186,7 +186,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback cycle_indicator_style");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.appearance.indicator_style = match config.appearance.indicator_style {
                         IndicatorStyle::Classic => IndicatorStyle::Minimal,
                         IndicatorStyle::Minimal => IndicatorStyle::Classic,
@@ -201,7 +201,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback cycle_widget_size");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.appearance.widget_size = match config.appearance.widget_size {
                         WidgetSize::Compact => WidgetSize::Standard,
                         WidgetSize::Standard => WidgetSize::Compact,
@@ -216,7 +216,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback cycle_ui_theme");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.appearance.ui_theme = match config.appearance.ui_theme {
                         UiTheme::Light => UiTheme::Dark,
                         UiTheme::Dark => UiTheme::Light,
@@ -231,7 +231,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_show_labels");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.appearance.show_labels = !config.appearance.show_labels;
                 }),
             );
@@ -243,7 +243,7 @@ fn bind_callbacks(window: &SettingsWindow) {
             runtime_log("callback toggle_reduced_motion");
             apply_backend_result(
                 &weak,
-                settings_window::update_config(|config| {
+                settings_bridge::update_config(|config| {
                     config.appearance.reduced_motion = !config.appearance.reduced_motion;
                 }),
             );
@@ -260,7 +260,7 @@ fn apply_backend_result(weak: &slint::Weak<SettingsWindow>, result: Result<AppCo
         }
     };
     if let Some(window) = weak.upgrade() {
-        let snapshot = settings_window::current_snapshot();
+        let snapshot = settings_bridge::current_snapshot();
         apply_state(&window, &snapshot, &config);
         runtime_log("callback state reapplied");
     }
@@ -291,16 +291,31 @@ fn apply_state(window: &SettingsWindow, snapshot: &AppStatusSnapshot, config: &A
 
     window.set_hero_value(localizer.state_label(snapshot.overall_state).into());
     window.set_hero_detail(localizer.status_detail(snapshot).into());
+    window.set_hero_meta(
+        format_timestamp_line(
+            &localizer.text("settings.last_refresh"),
+            snapshot.last_detection_refresh_at,
+            &localizer.text("detail.pending"),
+        )
+        .into(),
+    );
     window.set_widget_value(
         localizer
             .widget_mount_label(snapshot.widget_mount_state)
             .into(),
     );
     window.set_widget_detail(
-        localizer
-            .timestamp_line("settings.last_attach", snapshot.last_widget_attach_at)
-            .into(),
+        format_timestamp_line(
+            &localizer.text("settings.last_attach"),
+            snapshot.last_widget_attach_at,
+            &localizer.text("detail.pending"),
+        )
+        .into(),
     );
+    window.set_hero_status_color(visual_state_brush(snapshot.overall_state));
+    window.set_widget_status_color(widget_mount_brush(snapshot.widget_mount_state));
+    window.set_hero_status_hollow(visual_state_hollow(snapshot.overall_state));
+    window.set_widget_status_hollow(widget_mount_hollow(snapshot.widget_mount_state));
 
     let codex_source = snapshot.sources.get("codex");
     window.set_codex_value(
@@ -311,9 +326,19 @@ fn apply_state(window: &SettingsWindow, snapshot: &AppStatusSnapshot, config: &A
     );
     window.set_codex_detail(
         codex_source
-            .map(|source| localizer.source_detail(source))
+            .map(|source| format_source_detail(&localizer, source))
             .unwrap_or_else(|| fallback_source_detail(&localizer, "codex"))
             .into(),
+    );
+    window.set_codex_status_color(
+        codex_source
+            .map(|source| visual_state_brush(source.state))
+            .unwrap_or_else(|| visual_state_brush(SourceVisualState::Undiscovered)),
+    );
+    window.set_codex_status_hollow(
+        codex_source
+            .map(|source| visual_state_hollow(source.state))
+            .unwrap_or_else(|| visual_state_hollow(SourceVisualState::Undiscovered)),
     );
 
     let claude_source = snapshot.sources.get("claude");
@@ -325,9 +350,19 @@ fn apply_state(window: &SettingsWindow, snapshot: &AppStatusSnapshot, config: &A
     );
     window.set_claude_detail(
         claude_source
-            .map(|source| localizer.source_detail(source))
+            .map(|source| format_source_detail(&localizer, source))
             .unwrap_or_else(|| fallback_source_detail(&localizer, "claude"))
             .into(),
+    );
+    window.set_claude_status_color(
+        claude_source
+            .map(|source| visual_state_brush(source.state))
+            .unwrap_or_else(|| visual_state_brush(SourceVisualState::Undiscovered)),
+    );
+    window.set_claude_status_hollow(
+        claude_source
+            .map(|source| visual_state_hollow(source.state))
+            .unwrap_or_else(|| visual_state_hollow(SourceVisualState::Undiscovered)),
     );
 
     window.set_general_title(localizer.text("settings.general_title").into());
@@ -393,9 +428,11 @@ fn apply_state(window: &SettingsWindow, snapshot: &AppStatusSnapshot, config: &A
     window.set_diagnostics_hint(localizer.text("settings.diagnostics_hint").into());
     window.set_diagnostics_button_text(localizer.text("settings.diagnostics_refresh").into());
     window.set_diagnostics_primary(
-        localizer
-            .timestamp_line("settings.last_refresh", snapshot.last_detection_refresh_at)
-            .into(),
+        format_timestamp_value(
+            snapshot.last_detection_refresh_at,
+            &localizer.text("detail.pending"),
+        )
+        .into(),
     );
     window.set_diagnostics_secondary(
         format_diagnostics_error(&localizer, snapshot.last_error_summary.as_deref()).into(),
@@ -408,6 +445,7 @@ fn apply_state(window: &SettingsWindow, snapshot: &AppStatusSnapshot, config: &A
 
     window.set_about_title(localizer.text("settings.about_title").into());
     window.set_about_description(localizer.text("settings.about_description").into());
+    window.set_about_product_value(localizer.text("app.name").into());
     window.set_about_version_label(localizer.text("settings.about_version").into());
     window.set_about_version_value(env!("CARGO_PKG_VERSION").into());
     window.set_about_runtime_label(localizer.text("settings.about_runtime").into());
@@ -432,14 +470,8 @@ fn uppercase_display_label(text: &str) -> String {
 
 fn format_diagnostics_error(localizer: &Localizer, error: Option<&str>) -> String {
     match error {
-        Some(error) if !error.is_empty() => {
-            format!("{}: {error}", localizer.text("settings.last_error"))
-        }
-        _ => format!(
-            "{}: {}",
-            localizer.text("settings.last_error"),
-            localizer.text("detail.pending")
-        ),
+        Some(error) if !error.is_empty() => error.to_string(),
+        _ => localizer.text("detail.pending"),
     }
 }
 
@@ -460,7 +492,7 @@ fn format_source_diagnostic_line(
             format!(
                 "{} | {}",
                 localizer.source_label(source.source_id),
-                localizer.source_detail(source)
+                format_source_detail(localizer, source)
             )
         })
         .unwrap_or_else(|| format!("{fallback_label} | {}", localizer.text("detail.pending")))
@@ -473,6 +505,114 @@ fn fallback_source_detail(localizer: &Localizer, key: &str) -> String {
         _ => key.to_string(),
     };
     format!("{fallback_label} | {}", localizer.text("detail.pending"))
+}
+
+fn format_source_detail(
+    localizer: &Localizer,
+    source: &taskbar_widget::ui_state::SourceStatus,
+) -> String {
+    let mut parts = vec![
+        format!(
+            "{} {}",
+            localizer.text("detail.method"),
+            localizer.method_label(source.method)
+        ),
+        format!(
+            "{} {}",
+            localizer.text("detail.confidence"),
+            localizer.confidence_label(source.confidence)
+        ),
+        format!(
+            "{} {}",
+            localizer.text("detail.updated"),
+            format_timestamp_value(Some(source.updated_at), &localizer.text("detail.pending"))
+        ),
+    ];
+
+    if let Some(message) = &source.message {
+        parts.push(compact_identifier(message));
+    }
+
+    parts.join(" | ")
+}
+
+fn format_timestamp_line(prefix: &str, value: Option<u64>, pending: &str) -> String {
+    format!("{prefix}: {}", format_timestamp_value(value, pending))
+}
+
+fn format_timestamp_value(value: Option<u64>, pending: &str) -> String {
+    let Some(timestamp_ms) = value.filter(|value| *value > 0) else {
+        return pending.to_string();
+    };
+
+    let total_seconds = timestamp_ms / 1_000;
+    let seconds = (total_seconds % 60) as u32;
+    let total_minutes = total_seconds / 60;
+    let minutes = (total_minutes % 60) as u32;
+    let total_hours = total_minutes / 60;
+    let hours = (total_hours % 24) as u32;
+    let days = total_hours / 24;
+    let (year, month, day) = civil_from_days(days as i64);
+
+    format!("{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02}:{seconds:02} UTC")
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i32, u32, u32) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if m <= 2 { 1 } else { 0 };
+
+    (year as i32, m as u32, d as u32)
+}
+
+fn compact_identifier(value: &str) -> String {
+    if value.len() <= 28 || !value.contains('_') {
+        return value.to_string();
+    }
+
+    let start = &value[..16];
+    let end = &value[value.len().saturating_sub(6)..];
+    format!("{start}...{end}")
+}
+
+fn visual_state_brush(state: SourceVisualState) -> Brush {
+    match state {
+        SourceVisualState::Idle => brush_rgb(0x9a, 0x9a, 0x9a),
+        SourceVisualState::Working => brush_rgb(0x3b, 0xa5, 0x5d),
+        SourceVisualState::Attention => brush_rgb(0xd6, 0xa4, 0x39),
+        SourceVisualState::Blocking | SourceVisualState::Untrusted => brush_rgb(0xd6, 0x4a, 0x3a),
+        SourceVisualState::Undiscovered => brush_rgb(0x9a, 0x9a, 0x9a),
+    }
+}
+
+fn visual_state_hollow(state: SourceVisualState) -> bool {
+    matches!(
+        state,
+        SourceVisualState::Undiscovered | SourceVisualState::Idle
+    )
+}
+
+fn widget_mount_brush(state: taskbar_widget::ui_state::WidgetMountState) -> Brush {
+    match state {
+        taskbar_widget::ui_state::WidgetMountState::Attached => brush_rgb(0x3b, 0xa5, 0x5d),
+        taskbar_widget::ui_state::WidgetMountState::TrayOnly => brush_rgb(0x9a, 0x9a, 0x9a),
+        taskbar_widget::ui_state::WidgetMountState::Retrying => brush_rgb(0xd6, 0xa4, 0x39),
+    }
+}
+
+fn widget_mount_hollow(state: taskbar_widget::ui_state::WidgetMountState) -> bool {
+    matches!(state, taskbar_widget::ui_state::WidgetMountState::TrayOnly)
+}
+
+fn brush_rgb(red: u8, green: u8, blue: u8) -> Brush {
+    Color::from_rgb_u8(red, green, blue).into()
 }
 
 fn page_to_index(page: SettingsPage) -> i32 {
