@@ -122,7 +122,7 @@ fn aggregate_source_status(
     observations: Vec<SourceObservation>,
 ) -> SourceStatus {
     if observations.is_empty() {
-        return SourceStatus::undiscovered(source_id);
+        return SourceStatus::idle(source_id);
     }
 
     let mut best: Option<SourceObservation> = None;
@@ -160,17 +160,17 @@ fn aggregate_source_status(
     }
 
     let Some(best) = best else {
-        return SourceStatus::undiscovered(source_id);
+        return SourceStatus::idle(source_id);
     };
 
     if conflict {
         return SourceStatus {
             source_id,
-            state: SourceVisualState::Untrusted,
-            confidence: SourceConfidence::Untrusted,
+            state: SourceVisualState::Idle,
+            confidence: SourceConfidence::Degraded,
             method: best.kind.method(),
             updated_at: best.updated_at,
-            message: Some(format!("conflict_on_{}", best.kind.as_str())),
+            message: None,
         };
     }
 
@@ -187,7 +187,7 @@ fn aggregate_source_status(
 fn aggregate_overall_state<'a>(
     sources: impl Iterator<Item = &'a SourceStatus>,
 ) -> SourceVisualState {
-    let mut best = SourceVisualState::Undiscovered;
+    let mut best = SourceVisualState::Idle;
     let mut best_priority = overall_priority(best);
 
     for source in sources {
@@ -222,12 +222,11 @@ fn source_priority(source_id: SourceId, kind: ObservationKind) -> u8 {
 
 fn overall_priority(state: SourceVisualState) -> u8 {
     match state {
-        SourceVisualState::Undiscovered => 0,
-        SourceVisualState::Idle => 1,
+        SourceVisualState::Idle => 0,
+        SourceVisualState::Completed => 1,
         SourceVisualState::Working => 2,
-        SourceVisualState::Attention => 3,
-        SourceVisualState::Blocking => 4,
-        SourceVisualState::Untrusted => 2,
+        SourceVisualState::NeedsAttention => 3,
+        SourceVisualState::Error => 4,
     }
 }
 

@@ -59,23 +59,21 @@ impl SourceConfidence {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SourceVisualState {
-    Undiscovered,
     Idle,
     Working,
-    Attention,
-    Blocking,
-    Untrusted,
+    NeedsAttention,
+    Completed,
+    Error,
 }
 
 impl SourceVisualState {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Undiscovered => "undiscovered",
             Self::Idle => "idle",
             Self::Working => "working",
-            Self::Attention => "attention",
-            Self::Blocking => "blocking",
-            Self::Untrusted => "untrusted",
+            Self::NeedsAttention => "needs_attention",
+            Self::Completed => "completed",
+            Self::Error => "error",
         }
     }
 }
@@ -125,7 +123,7 @@ impl AppStatusSnapshot {
                 source_id.as_str().to_string(),
                 SourceStatus {
                     source_id,
-                    state: SourceVisualState::Undiscovered,
+                    state: SourceVisualState::Idle,
                     confidence: SourceConfidence::Degraded,
                     method: DetectionMethod::Unknown,
                     updated_at: 0,
@@ -136,7 +134,7 @@ impl AppStatusSnapshot {
 
         Self {
             widget_mount_state: WidgetMountState::Attached,
-            overall_state: SourceVisualState::Undiscovered,
+            overall_state: SourceVisualState::Idle,
             last_widget_attach_at: None,
             last_detection_refresh_at: None,
             last_error_summary: None,
@@ -146,10 +144,10 @@ impl AppStatusSnapshot {
 }
 
 impl SourceStatus {
-    pub fn undiscovered(source_id: SourceId) -> Self {
+    pub fn idle(source_id: SourceId) -> Self {
         Self {
             source_id,
-            state: SourceVisualState::Undiscovered,
+            state: SourceVisualState::Idle,
             confidence: SourceConfidence::Degraded,
             method: DetectionMethod::Unknown,
             updated_at: 0,

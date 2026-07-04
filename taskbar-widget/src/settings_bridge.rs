@@ -1,7 +1,7 @@
 use std::sync::{Mutex, OnceLock};
 
 use shared_core::{
-    settings_service::{SettingsReadModel, SettingsService, SettingsServiceError},
+    settings_service::{SettingsService, SettingsServiceError},
     tauri_ipc::SettingsSaveResultDto,
 };
 use taskbar_widget::{
@@ -89,10 +89,6 @@ pub fn current_config() -> AppConfig {
         .unwrap_or_else(AppConfig::default_v1)
 }
 
-pub fn read_model() -> Result<SettingsReadModel, SettingsServiceError> {
-    HostSettingsBridge::new().read_model()
-}
-
 pub fn update_config<F>(mutate: F) -> Result<AppConfig, String>
 where
     F: FnOnce(&mut AppConfig),
@@ -107,6 +103,21 @@ where
     HostSettingsBridge::new()
         .save_settings(&config)
         .map_err(service_error_to_string)?;
+    invalidate_fallback_window();
+    Ok(config.clone())
+}
+
+fn update_runtime_config<F>(mutate: F) -> Result<AppConfig, String>
+where
+    F: FnOnce(&mut AppConfig),
+{
+    let Some(lock) = SETTINGS_CONFIG.get() else {
+        return Err("settings config store unavailable".to_string());
+    };
+    let Ok(mut config) = lock.lock() else {
+        return Err("settings config lock poisoned".to_string());
+    };
+    mutate(&mut config);
     invalidate_fallback_window();
     Ok(config.clone())
 }
@@ -129,33 +140,28 @@ pub fn toggle_autostart_setting() -> Result<AppConfig, String> {
     Ok(config.clone())
 }
 
-pub fn cycle_language_setting() -> Result<AppConfig, String> {
-    update_config(|config| {
-        config.localization.language = match config.localization.language {
-            app_config::AppLanguage::FollowSystem => app_config::AppLanguage::ZhCn,
-            app_config::AppLanguage::ZhCn => app_config::AppLanguage::En,
-            app_config::AppLanguage::En => app_config::AppLanguage::FollowSystem,
-        };
-    })
-}
-
 pub fn request_manual_refresh_command() -> Result<AppConfig, String> {
-    let config = update_config(|config| {
-        config.diagnostics.last_manual_refresh_at = Some(agent_state::now_ms());
-    })?;
-
     let Some(main_hwnd) = current_main_hwnd() else {
         return Err("main window unavailable for refresh command".to_string());
     };
-    unsafe {
-        let _ = PostMessageW(
+    let post_result = unsafe {
+        PostMessageW(
             main_hwnd,
             windows::Win32::UI::WindowsAndMessaging::WM_COMMAND,
             WPARAM(usize::from(tray_icon::TRAY_CMD_REFRESH)),
             LPARAM(0),
-        );
+        )
+    };
+    if post_result.is_err() {
+        return Err(format!(
+            "PostMessageW refresh failed last_error={}",
+            win32::last_error_code()
+        ));
     }
-    Ok(config)
+
+    update_runtime_config(|config| {
+        config.diagnostics.last_manual_refresh_at = Some(agent_state::now_ms());
+    })
 }
 
 pub fn apply_full_settings(next: AppConfig) -> Result<SettingsSaveResultDto, String> {

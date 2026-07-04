@@ -53,7 +53,6 @@ TASKBAR_MVP_REFRESH_MODE=none
 ```text
 taskbar-widget/
   Cargo.toml
-  Cargo.lock
   README.md
   examples.codex-hooks.toml
   examples.claude-hooks.json

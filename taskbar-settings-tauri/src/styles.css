@@ -97,7 +97,6 @@ button {
 .brand-copy,
 .page-description,
 .section-note,
-.protocol-meta,
 .card-foot,
 .agent-meta,
 .agent-foot,
@@ -143,7 +142,6 @@ button {
 .brand-kicker,
 .section-kicker,
 .row-key,
-.protocol-key,
 .nav-index,
 .nav-label,
 .card-kicker {
@@ -306,28 +304,6 @@ button {
 .status-dot.warn,
 .status-dot.error {
   background: currentColor;
-}
-
-.protocol-block {
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.protocol-key {
-  margin-bottom: 6px;
-}
-
-.protocol-value {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.protocol-meta {
-  margin: 4px 0 0;
-  font-size: 13px;
 }
 
 .notice-banner {

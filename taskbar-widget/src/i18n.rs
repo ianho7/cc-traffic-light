@@ -91,12 +91,11 @@ impl Localizer {
 
     pub fn state_label(self, state: SourceVisualState) -> String {
         self.text(match state {
-            SourceVisualState::Undiscovered => "state.undiscovered",
             SourceVisualState::Idle => "state.idle",
             SourceVisualState::Working => "state.working",
-            SourceVisualState::Attention => "state.attention",
-            SourceVisualState::Blocking => "state.blocking",
-            SourceVisualState::Untrusted => "state.untrusted",
+            SourceVisualState::NeedsAttention => "state.needs_attention",
+            SourceVisualState::Completed => "state.completed",
+            SourceVisualState::Error => "state.error",
         })
     }
 
@@ -198,12 +197,12 @@ impl Localizer {
             .sources
             .get("codex")
             .map(|source| self.state_label(source.state))
-            .unwrap_or_else(|| self.state_label(SourceVisualState::Undiscovered));
+            .unwrap_or_else(|| self.state_label(SourceVisualState::Idle));
         let claude = snapshot
             .sources
             .get("claude")
             .map(|source| self.state_label(source.state))
-            .unwrap_or_else(|| self.state_label(SourceVisualState::Undiscovered));
+            .unwrap_or_else(|| self.state_label(SourceVisualState::Idle));
 
         format!(
             "{} | {}={} | {}={} | {}={}",

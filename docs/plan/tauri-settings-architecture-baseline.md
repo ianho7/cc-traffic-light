@@ -18,7 +18,7 @@
 
 明确需要迁移或抽边界的模块：
 
-- `taskbar-widget/src/settings_slint.rs`
+- `archive/slint-settings/taskbar-widget-settings_slint.rs`（已归档）
 - `taskbar-widget/src/settings_window.rs`
 - `taskbar-widget/src/app_config.rs`
 - `taskbar-widget/src/ui_state.rs`
@@ -27,7 +27,8 @@
 当前已经落地的架构结论：
 
 - 默认 `Open Settings` 主入口已经切到 `Tauri`
-- `Slint` 仍保留为显式 fallback，不再是默认入口
+- `Slint settings` 已从宿主主链路退场并归档到 `archive/slint-settings/`
+- 仅保留 `settings_window.rs` 作为极限 Win32 fallback
 - widget / tray / detector / taskbar attach 仍然由 `taskbar-widget` 原地承担，不属于本轮 Tauri UI 迁移范围
 
 ## 2. 进程边界与通信方向
@@ -54,15 +55,14 @@ flowchart LR
 1. tray 菜单或 tray callback 触发 `TrayAction::OpenSettings`
 2. `main.rs::handle_tray_action()` 先尝试 `settings_process::open_or_focus_tauri_settings()`
 3. 若 Tauri settings 进程可启动或已存在，则直接复用/聚焦该窗口
-4. 若显式设置 `CC_TRAFFIC_LIGHT_SETTINGS_HOST=slint`，或 Tauri 启动失败，则回退到 `show_slint_settings()`
-5. 若 Slint host 不可用，则显示 `settings_window.rs` 创建的 Win32 fallback 窗口
+4. 若显式设置 `CC_TRAFFIC_LIGHT_SETTINGS_HOST=win32` / `fallback`，或 Tauri 启动失败，则显示 `settings_window.rs` 创建的 Win32 fallback 窗口
 
 当前结论：
 
-- 默认入口已经切到 `Tauri settings`，不是 `Slint`。
+- 默认入口已经切到 `Tauri settings`，宿主不再初始化或同步 `Slint settings`。
 - `settings_window.rs` 仍然承担 fallback UI、配置写回 helper、手动刷新命令入口和当前 settings backend 角色。
-- `CC_TRAFFIC_LIGHT_SETTINGS_HOST=slint` 仍可作为显式 fallback 开关，在 Tauri 稳定性验收完成前保留。
-- 这意味着 Tauri 迁移已经越过“灰度只读 UI”阶段，后续重点转向运行验证、fallback hardening 和 Slint 退场边界。
+- `CC_TRAFFIC_LIGHT_SETTINGS_HOST=win32` 或 `fallback` 可作为显式 fallback 开关保留。
+- 这意味着 Tauri 迁移已经越过“灰度只读 UI”阶段，后续重点转向运行验证、fallback hardening 和 Win32 fallback 是否长期保留。
 
 ## 4. 当前 Settings 职责盘点
 
@@ -110,11 +110,11 @@ flowchart LR
 
 ### 4.3 设置命令
 
-当前真实写入命令集中在 `taskbar-widget/src/settings_window.rs`：
+当前真实写入命令集中在 `taskbar-widget/src/settings_bridge.rs`：
 
 - `update_config`
 - `toggle_autostart_setting`
-- `cycle_language_setting`
+- `apply_full_settings`
 - `request_manual_refresh_command`
 
 当前含义：
@@ -125,13 +125,13 @@ flowchart LR
 
 ### 4.4 窗口入口
 
-- `settings_slint.rs`：当前默认 presentation host
+- `taskbar-settings-tauri`：当前默认 settings presentation host
 - `settings_window.rs`：当前 fallback window + backend helper
 - `main.rs`：settings 生命周期总入口和 host 选择逻辑
 
 ### 4.5 字符串 / i18n
 
-- `settings_slint.rs` 通过 `i18n::Localizer` 输出文案
+- `taskbar-settings-tauri/src/App.tsx` 当前直接维护页面文案与标签
 - `settings_window.rs` 仍有大量硬编码英文
 - tray 已开始依赖 `Localizer`
 
@@ -141,7 +141,7 @@ flowchart LR
 
 ### 4.6 UI 渲染
 
-- `settings_slint.rs` + `ui/settings.slint`：当前正式 settings presentation
+- `taskbar-settings-tauri` React + Tauri：当前正式 settings presentation
 - `settings_window.rs`：仅作为 fallback presentation
 
 ## 5. 当前 6 个页面的真实字段与交互要求
@@ -321,9 +321,9 @@ cargo build -p taskbar-widget --offline
 
 回退策略固定如下：
 
-- 默认走 Tauri path；`CC_TRAFFIC_LIGHT_SETTINGS_HOST=slint` 作为显式 fallback 开关保留到稳定性验收完成
-- `settings_window.rs` 在中期仍保留为 fallback backend / archive 候选
-- 最终不直接删除旧 Slint settings；先迁移到 `archive/`，再切主链路引用
+- 默认走 Tauri path；`CC_TRAFFIC_LIGHT_SETTINGS_HOST=win32` 或 `fallback` 作为显式 fallback 开关保留
+- `settings_window.rs` 当前仍保留为极限 fallback backend / archive 候选
+- 旧 Slint settings 已迁移到 `archive/slint-settings/`，不再保留主链路引用
 
 ## 11. 当前已验证状态
 
@@ -337,7 +337,6 @@ cargo build -p taskbar-widget --offline
 
 当前仍未完成的部分：
 
-- `Slint` 退场与归档
 - 全量可写项的逐项“UI 变化 / 配置落盘 / 宿主行为变化”验收
 - `pnpm build`、视觉差异文档、主链路无回归的补证
 
@@ -348,7 +347,7 @@ cargo build -p taskbar-widget --offline
 1. 补 `pnpm build` 与主链路回归证据
 2. 逐项验收 General / Monitoring / Appearance / Diagnostics 的真实写路径
 3. 记录 Tauri UI 与 HTML demo 的剩余差异
-4. 评估 `settings_slint.rs` / `settings_window.rs` 的最终 archive 范围
+4. 评估 `settings_window.rs` 是否继续保留为长期 fallback
 
 ## 13. 当前构建产物形态确认
 

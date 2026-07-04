@@ -17,7 +17,8 @@ use crate::win32;
 
 const SETTINGS_HOST_ENV: &str = "CC_TRAFFIC_LIGHT_SETTINGS_HOST";
 const SETTINGS_HOST_TAURI: &str = "tauri";
-const SETTINGS_HOST_SLINT: &str = "slint";
+const SETTINGS_HOST_FALLBACK: &str = "fallback";
+const SETTINGS_HOST_WIN32: &str = "win32";
 const SETTINGS_EXE_ENV: &str = "CC_TRAFFIC_LIGHT_TAURI_SETTINGS_EXE";
 
 static SETTINGS_PROCESS: OnceLock<Mutex<SettingsProcessState>> = OnceLock::new();
@@ -39,7 +40,9 @@ pub fn tauri_settings_enabled() -> bool {
 fn tauri_settings_enabled_from_host_env(value: Option<&str>) -> bool {
     value
         .map(|value| {
-            if value.eq_ignore_ascii_case(SETTINGS_HOST_SLINT) {
+            if value.eq_ignore_ascii_case(SETTINGS_HOST_FALLBACK)
+                || value.eq_ignore_ascii_case(SETTINGS_HOST_WIN32)
+            {
                 return false;
             }
             value.eq_ignore_ascii_case(SETTINGS_HOST_TAURI) || !value.is_empty()
@@ -243,9 +246,10 @@ mod tests {
     }
 
     #[test]
-    fn host_env_allows_explicit_slint_fallback() {
-        assert!(!tauri_settings_enabled_from_host_env(Some("slint")));
-        assert!(!tauri_settings_enabled_from_host_env(Some("SLINT")));
+    fn host_env_allows_explicit_win32_fallback() {
+        assert!(!tauri_settings_enabled_from_host_env(Some("fallback")));
+        assert!(!tauri_settings_enabled_from_host_env(Some("FALLBACK")));
+        assert!(!tauri_settings_enabled_from_host_env(Some("win32")));
     }
 
     #[test]

@@ -48,7 +48,7 @@
 
 ## docs/handoff/
 
-- `2026-07-04-0130.md`: Current migration handoff covering the `TaskDialogIndirect` root cause, separate-build constraint, and lifecycle validation result.
+- `2026-07-04-1429.md`: Current migration handoff covering Slint retirement, Tauri-only settings entry, and the latest validation status.
 
 ## docs/plan/
 
@@ -71,6 +71,7 @@
 
 - `package.json`: PNPM package manifest for the React frontend and Tauri shell commands.
 - `index.html`: Vite HTML entry for the settings frontend.
+- `scripts/`: Frontend build and coverage-audit scripts for the Tauri settings surface.
 - `src/`: React settings UI, page structure, polling logic, and frontend DTO rendering.
 - `src-tauri/`: Tauri Rust backend that bridges frontend commands to the host named pipe.
 - `dist/`: Built frontend assets produced by `pnpm build`.
@@ -97,6 +98,7 @@
 - `diagnose-taskbar-loop.ps1`: Focused Win11 taskbar visibility diagnosis loop for parent, anchor, coordinate, and render evidence.
 - `diagnose-widget-liveness.ps1`: Widget lifecycle and redraw diagnosis harness for runtime visibility and repaint regressions.
 - `validate-tauri-settings-lifecycle.ps1`: End-to-end lifecycle validator for spawning, reusing, closing, and recovering the Tauri settings process.
+- `validate-tauri-settings-read-model.ps1`: Live host named-pipe validator for snapshot reads, settings reads, refresh writes, and save/restore persistence.
 - `codex-lifecycle-hook-dump.ps1`: Codex lifecycle hook dump script for redacted shape-only payload sampling.
 - `codex-notify-probe-config.ps1`: Helper that prepares or inspects Codex notify probe configuration during low-fidelity notify experiments.
 - `codex-notify-probe-wrapper.ps1`: Wrapper that captures Codex notify probe inputs while forwarding the original notify command shape.
@@ -104,11 +106,10 @@
 
 ## taskbar-widget/src/
 
-- `main.rs`: Starts the host, binds settings infrastructure, paints the widget, and runs the Win32 plus Slint event loop.
-- `settings_process.rs`: Manages Tauri settings process launch, focus, reuse, fallback selection, and shutdown bookkeeping.
+- `main.rs`: Starts the host, binds settings infrastructure, paints the widget, and runs the pure Win32 message loop.
+- `settings_process.rs`: Manages Tauri settings process launch, focus, reuse, Win32 fallback selection, and shutdown bookkeeping.
 - `settings_bridge.rs`: Host-side facade for reading snapshots, reading and saving config, applying changes, and issuing refresh requests.
 - `tauri_settings_ipc.rs`: Named-pipe server for Tauri settings commands and JSON request/response envelopes.
-- `settings_slint.rs`: Slint settings host retained as an explicit fallback while Tauri migration is still hardening.
 - `settings_window.rs`: Win32 fallback settings window and helper commands retained for deep fallback scenarios.
 - `app_config.rs`: Host-facing config helpers and compatibility layer around the shared settings model.
 - `ui_state.rs`: Runtime snapshot model and source-status projection used by the widget and settings surfaces.

@@ -42,6 +42,7 @@ taskbar-settings-tauri/node_modules/
 taskbar-settings-tauri/dist/
 taskbar-settings-tauri/src-tauri/target/
 taskbar-settings-tauri/src-tauri/gen/
+target-codex-verify
 
 # Local review/debug artifacts
 slint-runtime.log

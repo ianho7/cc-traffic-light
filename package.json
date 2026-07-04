@@ -2,6 +2,8 @@
   "name": "cc-traffic-light-workspace",
   "private": true,
   "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File ./scripts/rebuild-all.ps1",
+    "build:frontend": "pnpm -C taskbar-settings-tauri build",
     "settings:dev": "pnpm -C taskbar-settings-tauri dev",
     "settings:build": "pnpm -C taskbar-settings-tauri build",
     "settings:tauri:dev": "pnpm -C taskbar-settings-tauri tauri dev",

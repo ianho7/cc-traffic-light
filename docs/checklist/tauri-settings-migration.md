@@ -135,7 +135,7 @@ Policy:
 
 ### Phase 6: Read-Only Integration
 
-- [ ] TSM-F-01 让 Tauri UI 读取真实配置与真实状态，但先不开放写入。
+- [x] TSM-F-01 让 Tauri UI 读取真实配置与真实状态，但先不开放写入。
 - [x] TSM-F-02 接入 1 秒轮询刷新策略，用于更新 detector 状态与运行摘要。
 - [x] TSM-F-03 确认 Overview、Diagnostics、About、各来源状态卡都显示真实数据，不再依赖假数据。
 - [ ] TSM-F-04 验证宿主轮询与 Tauri 轮询之间没有明显重复抖动、卡顿或日志刷屏。
@@ -152,18 +152,18 @@ Policy:
 ### Phase 8: Entry Switch and Lifecycle Hardening
 
 - [x] TSM-H-01 把 tray 的 `Open Settings` 主入口切到 Tauri。
-- [x] TSM-H-02 保留 Slint fallback 开关，直到 Tauri 完成稳定性验收。
+- [x] TSM-H-02 保留 Win32 fallback 开关，直到 Tauri 完成稳定性验收。
 - [x] TSM-H-03 验证重复打开、关闭、隐藏、再打开 settings 时，不会留下孤儿进程或僵尸窗口。
 - [x] TSM-H-04 验证主进程退出时能正确回收或通知 Tauri settings 进程。
 - [x] TSM-H-05 验证 Tauri 异常退出时，宿主侧有清晰可诊断日志，并允许再次打开。
 
 ### Phase 9: Slint Retirement and Archive
 
-- [ ] TSM-I-01 确认 `settings_slint.rs` 已不再承担默认主入口职责。
-- [ ] TSM-I-02 评估 `settings_window.rs` 是否仍保留为极限 fallback；若不保留，先归档再删主链路引用。
-- [ ] TSM-I-03 将旧 Slint settings 相关 UI 资源和说明文档归档到 `archive/`，保留迁移参考价值。
-- [ ] TSM-I-04 清理 `taskbar-widget/Cargo.toml` 中仅用于 Slint settings 的依赖与 build 脚本。
-- [ ] TSM-I-05 审计仓库，确认没有遗留“看起来还在用，实际上已废弃”的双轨 settings 代码。
+- [x] TSM-I-01 确认 `settings_slint.rs` 已归档且不再承担默认主入口职责。
+- [x] TSM-I-02 评估 `settings_window.rs` 仍保留为极限 fallback，仅在 Tauri 不可用时显示。
+- [x] TSM-I-03 将旧 Slint settings 相关 UI 资源和说明文档归档到 `archive/slint-settings/`，保留迁移参考价值。
+- [x] TSM-I-04 清理 `taskbar-widget/Cargo.toml` 中仅用于 Slint settings 的依赖与 build 脚本。
+- [x] TSM-I-05 审计仓库，确认没有遗留“看起来还在用，实际上已废弃”的双轨 settings 代码。
 
 ### Phase 10: Packaging, Docs, and Handoff
 
@@ -177,30 +177,30 @@ Policy:
 
 - [x] TSM-VAL-01 `cargo check` 通过。
 - [x] TSM-VAL-02 shared-core 相关 Rust tests 通过。
-- [ ] TSM-VAL-03 `pnpm build` 通过。
+- [x] TSM-VAL-03 `pnpm build` 通过。
 - [x] TSM-VAL-04 Tauri 工程可构建并正常打开 settings 窗口。
 - [x] TSM-VAL-05 从 tray 打开 settings 时，默认进入 Tauri 路径。
-- [ ] TSM-VAL-06 Overview 和 Diagnostics 显示真实运行状态，而不是静态演示数据。
-- [ ] TSM-VAL-07 当前 6 个页面结构都存在，字段与现有配置模型一一对应。
+- [x] TSM-VAL-06 Overview 和 Diagnostics 显示真实运行状态，而不是静态演示数据。
+- [x] TSM-VAL-07 当前 6 个页面结构都存在，字段与现有配置模型一一对应。
 - [ ] TSM-VAL-08 每个可写设置项都完成：改值、落盘、重启保持一致、即时影响宿主行为。
 - [ ] TSM-VAL-09 1 秒轮询不会造成明显 CPU 抖动、日志洪泛或窗口卡顿。
 - [x] TSM-VAL-10 连续多次打开/关闭 settings 后，无重复进程、僵尸窗口或状态不同步。
 - [x] TSM-VAL-11 Tauri 异常退出后，tray 再次打开 settings 能恢复。
 - [ ] TSM-VAL-12 widget、tray、detector、taskbar attach 主链路无明显回归。
 - [ ] TSM-VAL-13 与 HTML demo 的关键视觉基线一致：层级、版式、字体角色、状态卡气质、信息密度。
-- [ ] TSM-VAL-14 旧 Slint 代码已归档或明确降级为 fallback，不再形成真实双主入口。
+- [x] TSM-VAL-14 旧 Slint 代码已归档或明确降级为 fallback，不再形成真实双主入口。
 
 ## Documentation Checklist
 
 - [x] TSM-DOC-01 新增或更新迁移架构说明，包含进程边界图和通信方向说明。
 - [x] TSM-DOC-02 更新构建命令说明，区分 Rust 宿主与 Tauri 前端。
-- [ ] TSM-DOC-03 更新 settings 设计文档，记录与 HTML demo 的差异点和理由。
+- [x] TSM-DOC-03 更新 settings 设计文档，记录与 HTML demo 的差异点和理由。
 - [x] TSM-DOC-04 更新 handoff，明确剩余风险、已知限制、回退方式。
 - [x] TSM-DOC-05 对每个已完成任务生成 reflection。
 
 ## Cleanup Checklist
 
-- [ ] TSM-CLN-01 删除不再使用的 Slint-only 资源引用和构建残留。
+- [x] TSM-CLN-01 删除不再使用的 Slint-only 资源引用和构建残留。
 - [ ] TSM-CLN-02 清理临时 IPC 调试日志、假数据、实验页面和无效脚本。
 - [ ] TSM-CLN-03 确保命名一致：`shared-core`、宿主 bridge、Tauri commands、前端 DTO 不混用旧术语。
 - [ ] TSM-CLN-04 确保没有把 Win32 句柄、UI 框架类型或 Tauri runtime 细节泄漏进 shared-core。
@@ -222,7 +222,7 @@ Policy:
 
 可接受的已知限制：
 
-- 第一阶段可以保留 Slint fallback，但不能长期保留双主入口。
+- 第一阶段可以保留 Win32 fallback，但不能长期保留双主入口。
 - 可以接受多文件安装形态，只要用户认知上仍是一套应用。
 - 与 HTML demo 的差异允许存在，但必须有明确记录，且不能破坏整体 Nothing 风格层级。
 

@@ -146,7 +146,7 @@ fn notify_icon_data(hwnd: HWND, config: &AppConfig) -> NOTIFYICONDATAW {
         uID: TRAY_ICON_UID,
         uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
         uCallbackMessage: TRAY_CALLBACK_MESSAGE,
-        hIcon: tray_icon_handle_for_overall("undiscovered"),
+        hIcon: tray_icon_handle_for_overall("idle"),
         ..Default::default()
     };
     copy_tooltip(
@@ -178,21 +178,20 @@ fn tray_icon_handle_for_overall(overall: &str) -> windows::Win32::UI::WindowsAnd
     match overall {
         "idle" => cache.idle(),
         "working" => cache.working(),
-        "attention" => cache.attention(),
-        "blocking" => cache.blocking(),
-        "untrusted" => cache.untrusted(),
-        _ => cache.undiscovered(),
+        "completed" => cache.completed(),
+        "needs_attention" => cache.needs_attention(),
+        "error" => cache.error(),
+        _ => cache.idle(),
     }
 }
 
 fn build_tray_icon_cache() -> TrayIconCache {
     TrayIconCache {
-        undiscovered: create_status_icon(rgb(56, 56, 60)).0 as isize,
         idle: create_status_icon(rgb(82, 214, 113)).0 as isize,
         working: create_status_icon(rgb(82, 214, 113)).0 as isize,
-        attention: create_status_icon(rgb(255, 210, 76)).0 as isize,
-        blocking: create_status_icon(rgb(255, 108, 96)).0 as isize,
-        untrusted: create_status_icon(rgb(120, 120, 128)).0 as isize,
+        completed: create_status_icon(rgb(255, 210, 76)).0 as isize,
+        needs_attention: create_status_icon(rgb(255, 210, 76)).0 as isize,
+        error: create_status_icon(rgb(255, 108, 96)).0 as isize,
     }
 }
 
@@ -265,19 +264,14 @@ fn rgb(red: u8, green: u8, blue: u8) -> u32 {
 }
 
 struct TrayIconCache {
-    undiscovered: isize,
     idle: isize,
     working: isize,
-    attention: isize,
-    blocking: isize,
-    untrusted: isize,
+    completed: isize,
+    needs_attention: isize,
+    error: isize,
 }
 
 impl TrayIconCache {
-    fn undiscovered(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
-        windows::Win32::UI::WindowsAndMessaging::HICON(self.undiscovered as *mut _)
-    }
-
     fn idle(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
         windows::Win32::UI::WindowsAndMessaging::HICON(self.idle as *mut _)
     }
@@ -286,30 +280,29 @@ impl TrayIconCache {
         windows::Win32::UI::WindowsAndMessaging::HICON(self.working as *mut _)
     }
 
-    fn attention(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
-        windows::Win32::UI::WindowsAndMessaging::HICON(self.attention as *mut _)
+    fn completed(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
+        windows::Win32::UI::WindowsAndMessaging::HICON(self.completed as *mut _)
     }
 
-    fn blocking(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
-        windows::Win32::UI::WindowsAndMessaging::HICON(self.blocking as *mut _)
+    fn needs_attention(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
+        windows::Win32::UI::WindowsAndMessaging::HICON(self.needs_attention as *mut _)
     }
 
-    fn untrusted(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
-        windows::Win32::UI::WindowsAndMessaging::HICON(self.untrusted as *mut _)
+    fn error(&self) -> windows::Win32::UI::WindowsAndMessaging::HICON {
+        windows::Win32::UI::WindowsAndMessaging::HICON(self.error as *mut _)
     }
 }
 
 impl Drop for TrayIconCache {
     fn drop(&mut self) {
         unsafe {
-            let _ = DestroyIcon(self.undiscovered());
             let _ = DestroyIcon(self.idle());
             if self.working != self.idle {
                 let _ = DestroyIcon(self.working());
             }
-            let _ = DestroyIcon(self.attention());
-            let _ = DestroyIcon(self.blocking());
-            let _ = DestroyIcon(self.untrusted());
+            let _ = DestroyIcon(self.completed());
+            let _ = DestroyIcon(self.needs_attention());
+            let _ = DestroyIcon(self.error());
         }
     }
 }

@@ -10,7 +10,6 @@
 taskbar-widget/
 |-- .gitignore
 |-- build.rs
-|-- Cargo.lock
 |-- Cargo.toml
 |-- README.md
 |-- examples.claude-hooks.json
@@ -22,6 +21,7 @@ taskbar-widget/
 |   |-- codex-notify-probe-wrapper.ps1
 |   |-- diagnose-taskbar-loop.ps1
 |   |-- diagnose-widget-liveness.ps1
+|   |-- validate-tauri-settings-read-model.ps1
 |   `-- install-codex-hooks.ps1
 |-- src/
 |   |-- agent_state.rs
@@ -33,7 +33,6 @@ taskbar-widget/
 |   |-- lib.rs
 |   |-- main.rs
 |   |-- runtime_contract.rs
-|   |-- settings_slint.rs
 |   |-- settings_window.rs
 |   |-- taskbar.rs
 |   |-- tray_icon.rs
@@ -42,7 +41,6 @@ taskbar-widget/
 |   `-- bin/
 |       `-- taskbar_widget_hook.rs
 `-- ui/
-    |-- settings.slint
     `-- i18n/
         |-- en.json
         `-- zh-CN.json
@@ -51,8 +49,7 @@ taskbar-widget/
 ## 顶层文件
 
 - `.gitignore`：忽略 Rust 构建输出和本地环境噪音文件。
-- `build.rs`：在编译阶段预编译 Slint 设置界面资源。
-- `Cargo.lock`：锁定依赖版本，保证本地与 CI 构建一致。
+- `build.rs`：在编译阶段为宿主嵌入 Windows manifest。
 - `Cargo.toml`：定义 Rust 包信息、依赖和构建脚本入口。
 - `README.md`：说明任务栏挂载验证目标、稳定路径和调试方法。
 - `examples.claude-hooks.json`：提供 Claude Code hook 的示例配置文件。
@@ -66,6 +63,7 @@ taskbar-widget/
 - `scripts/codex-notify-probe-wrapper.ps1`：包装 Codex 通知探针执行流程并输出诊断结果。
 - `scripts/diagnose-taskbar-loop.ps1`：批量运行任务栏挂载诊断组合并收集结果。
 - `scripts/diagnose-widget-liveness.ps1`：检查任务栏组件显示、刷新和存活状态。
+- `scripts/validate-tauri-settings-read-model.ps1`：启动宿主并验证 live named-pipe settings read/write 基线。
 - `scripts/install-codex-hooks.ps1`：安装或更新本项目使用的 Codex hook 配置。
 
 ## src
@@ -79,8 +77,7 @@ taskbar-widget/
 - `src/lib.rs`：导出共享状态、配置、检测和本地化模块。
 - `src/main.rs`：负责进程启动、窗口创建、托盘、轮询和消息循环。
 - `src/runtime_contract.rs`：定义运行时约定的模块名与信号名集合。
-- `src/settings_slint.rs`：连接 Slint 设置窗口与现有配置、状态回调。
-- `src/settings_window.rs`：提供原生 GDI 设置窗口的后备实现与交互绑定。
+- `src/settings_window.rs`：提供原生 GDI 设置窗口的极限后备实现与交互绑定。
 - `src/taskbar.rs`：探测任务栏窗口、挂载子窗口并计算布局位置。
 - `src/tray_icon.rs`：创建托盘图标菜单并分发用户命令。
 - `src/ui_state.rs`：定义设置界面和组件绘制共享的状态结构。
@@ -90,12 +87,11 @@ taskbar-widget/
 
 - `src/bin/taskbar_widget_hook.rs`：接收外部 hook 事件并写入统一状态文件。
 
-## ui
-
-- `ui/settings.slint`：声明 Slint 设置窗口的视觉结构、样式 token 和页面布局。
-
 ## ui/i18n
 
 - `ui/i18n/en.json`：提供设置界面和状态文本的英文文案资源。
 - `ui/i18n/zh-CN.json`：提供设置界面和状态文本的简体中文文案资源。
 
+## Archive
+
+- `../archive/slint-settings/`：保存已从主链路退场的 Slint settings host 与 UI 结构，供迁移回溯使用。

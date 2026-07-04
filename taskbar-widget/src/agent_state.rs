@@ -19,7 +19,7 @@ pub const STATE_DIR_ENV: &str = "TASKBAR_WIDGET_STATE_HOME";
 const STATE_FILE_NAME: &str = "state.json";
 const SCHEMA_VERSION: u32 = 1;
 const LOCK_TIMEOUT_MS: u32 = 2_000;
-const DONE_RETENTION_MS: u64 = 10 * 60 * 1_000;
+const DONE_RETENTION_MS: u64 = 60 * 1_000;
 const ERROR_RETENTION_MS: u64 = 30 * 60 * 1_000;
 const WORKING_STALE_MS: u64 = 30 * 60 * 1_000;
 const WAITING_STALE_MS: u64 = 24 * 60 * 60 * 1_000;
@@ -257,6 +257,7 @@ pub fn load_state_for_display_diagnostic() -> DisplayLoadResult {
         };
     };
 
+    prune_expired_tasks(&mut state, now);
     refresh_summaries(&mut state, now);
     DisplayLoadResult {
         state,

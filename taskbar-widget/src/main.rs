@@ -1,7 +1,6 @@
 mod autostart;
 mod settings_bridge;
 mod settings_process;
-mod settings_slint;
 mod settings_window;
 mod taskbar;
 mod tauri_settings_ipc;
@@ -32,13 +31,14 @@ use windows::{
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetClientRect, IDC_ARROW,
-            KillTimer, LoadCursorW, PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SetCursor,
-            SetTimer, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_DESTROY,
-            WM_NCDESTROY, WM_PAINT, WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
+            CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DispatchMessageW,
+            GetClientRect, GetMessageW, IDC_ARROW, KillTimer, LoadCursorW, MSG, PostQuitMessage,
+            RegisterClassW, SW_HIDE, SW_SHOW, SetCursor, SetTimer, ShowWindow, TranslateMessage,
+            WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_DESTROY, WM_NCDESTROY,
+            WM_PAINT, WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
         },
     },
-    core::{Error, HRESULT, Result, w},
+    core::{Error, Result, w},
 };
 
 const WINDOW_CLASS_NAME: windows::core::PCWSTR = w!("TaskbarWidgetWindow");
@@ -155,7 +155,6 @@ fn main() -> Result<()> {
     settings_bridge::bind_main_window(hwnd);
     tauri_settings_ipc::ensure_server_started();
     store_settings_hwnd(settings_hwnd);
-    initialize_slint_settings(AppStatusSnapshot::empty(), config_result.config.clone());
 
     set_runtime_stage("attach_to_taskbar");
     let attach = taskbar::attach_to_taskbar(hwnd, &probe, &debug_config);
@@ -226,10 +225,7 @@ fn main() -> Result<()> {
     );
 
     set_runtime_stage("message_loop");
-    slint::run_event_loop_until_quit().map_err(|error| {
-        runtime_log(&format!("Slint event loop exited with error: {error}"));
-        Error::new(HRESULT(0x8000_4005u32 as i32), error.to_string())
-    })
+    run_message_loop()
 }
 
 fn register_window_class(hinstance: HINSTANCE) -> Result<()> {
@@ -332,7 +328,6 @@ unsafe extern "system" fn window_proc(
             set_runtime_stage("wm_destroy");
             win32::debug_log("WM_DESTROY received");
             tray_icon::remove_tray_icon(hwnd);
-            settings_slint::shutdown();
             settings_process::shutdown_managed_tauri_settings();
             runtime_log(&format!(
                 "WM_DESTROY received hwnd={}",
@@ -370,12 +365,12 @@ fn initialize_paint_state() {
             .sources
             .get("codex")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered"),
+            .unwrap_or("idle"),
         snapshot
             .sources
             .get("claude")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered"),
+            .unwrap_or("idle"),
     ));
     let _ = PAINT_STATE.set(Mutex::new(PaintState {
         snapshot: snapshot.clone(),
@@ -387,12 +382,12 @@ fn initialize_paint_state() {
             .sources
             .get("codex")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered"),
+            .unwrap_or("idle"),
         snapshot
             .sources
             .get("claude")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered")
+            .unwrap_or("idle")
     ));
     if let Some(hwnd) = current_settings_hwnd() {
         let _ = hwnd;
@@ -415,12 +410,12 @@ fn poll_hook_state(hwnd: HWND) {
             .sources
             .get("codex")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered"),
+            .unwrap_or("idle"),
         next_snapshot
             .sources
             .get("claude")
             .map(|source| source.state.as_str())
-            .unwrap_or("undiscovered")
+            .unwrap_or("idle")
     ));
     let Some(lock) = PAINT_STATE.get() else {
         return;
@@ -437,12 +432,12 @@ fn poll_hook_state(hwnd: HWND) {
                 .sources
                 .get("codex")
                 .map(|source| source.state.as_str())
-                .unwrap_or("undiscovered"),
+                .unwrap_or("idle"),
             next_snapshot
                 .sources
                 .get("claude")
                 .map(|source| source.state.as_str())
-                .unwrap_or("undiscovered")
+                .unwrap_or("idle")
         ));
         runtime_log(&format!(
             "snapshot changed old_overall={} new_overall={} invalidate_requested=true",
@@ -537,7 +532,7 @@ fn paint_style(snapshot: &AppStatusSnapshot, rect: &RECT) -> WidgetPaintStyle {
                 .sources
                 .get("codex")
                 .map(|source| source.state)
-                .unwrap_or(SourceVisualState::Undiscovered),
+                .unwrap_or(SourceVisualState::Idle),
             green: RECT {
                 left: rect.left + 16,
                 top: top + 20,
@@ -563,7 +558,7 @@ fn paint_style(snapshot: &AppStatusSnapshot, rect: &RECT) -> WidgetPaintStyle {
                 .sources
                 .get("claude")
                 .map(|source| source.state)
-                .unwrap_or(SourceVisualState::Undiscovered),
+                .unwrap_or(SourceVisualState::Idle),
             green: RECT {
                 left: rect.left + half + 16,
                 top: top + 20,
@@ -638,22 +633,21 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
     match action {
         tray_icon::TrayAction::OpenSettings => {
             match settings_process::open_or_focus_tauri_settings() {
-                Ok(true) => return,
+                Ok(true) => {
+                    if let Some(settings_hwnd) = current_settings_hwnd() {
+                        settings_window::hide_window(settings_hwnd);
+                    }
+                    return;
+                }
                 Ok(false) => {}
                 Err(error) => {
                     runtime_log(&format!(
-                        "tauri settings open failed; falling back to slint: {error}"
+                        "tauri settings open failed; falling back to Win32 settings window: {error}"
                     ));
                 }
             }
-            let snapshot = current_app_status_snapshot();
-            let config = settings_bridge::current_config();
-            if show_slint_settings(&snapshot, &config) {
-                if let Some(hwnd) = current_settings_hwnd() {
-                    settings_window::hide_window(hwnd);
-                }
-            } else if let Some(hwnd) = current_settings_hwnd() {
-                settings_window::show_window(hwnd);
+            if let Some(settings_hwnd) = current_settings_hwnd() {
+                settings_window::show_window(settings_hwnd);
             }
         }
         tray_icon::TrayAction::Refresh => {
@@ -664,21 +658,43 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                     "manual_refresh requested overall={} codex={} claude={}",
                     snapshot.overall_state.as_str(),
                     snapshot
-                        .sources
-                        .get("codex")
-                        .map(|source| source.state.as_str())
-                        .unwrap_or("undiscovered"),
+                .sources
+                .get("codex")
+                .map(|source| source.state.as_str())
+                .unwrap_or("idle"),
                     snapshot
-                        .sources
-                        .get("claude")
-                        .map(|source| source.state.as_str())
-                        .unwrap_or("undiscovered")
+                .sources
+                .get("claude")
+                .map(|source| source.state.as_str())
+                .unwrap_or("idle")
                 ));
             }
             poll_hook_state(hwnd);
         }
         tray_icon::TrayAction::Exit => {}
     }
+}
+
+fn run_message_loop() -> Result<()> {
+    let mut message = MSG::default();
+
+    loop {
+        let status = unsafe { GetMessageW(&mut message, HWND::default(), 0, 0) }.0;
+        if status == -1 {
+            runtime_log("Win32 message loop failed");
+            return Err(Error::from_win32());
+        }
+        if status == 0 {
+            break;
+        }
+
+        unsafe {
+            let _ = TranslateMessage(&message);
+            let _ = DispatchMessageW(&message);
+        }
+    }
+
+    Ok(())
 }
 
 fn initialize_widget_runtime_state(mount_state: WidgetMountState) {
@@ -804,19 +820,6 @@ fn current_settings_hwnd() -> Option<HWND> {
         .filter(|hwnd| hwnd.0 != ptr::null_mut())
 }
 
-fn initialize_slint_settings(snapshot: AppStatusSnapshot, config: app_config::AppConfig) {
-    match settings_slint::initialize(&snapshot, &config) {
-        Ok(()) => {
-            runtime_log("Slint settings host initialized");
-        }
-        Err(error) => {
-            runtime_log(&format!(
-                "Slint settings host unavailable; Win32 fallback remains default: {error}"
-            ));
-        }
-    }
-}
-
 fn current_app_status_snapshot() -> AppStatusSnapshot {
     APP_STATUS_SNAPSHOT
         .get()
@@ -824,26 +827,13 @@ fn current_app_status_snapshot() -> AppStatusSnapshot {
         .unwrap_or_else(AppStatusSnapshot::empty)
 }
 
-fn show_slint_settings(snapshot: &AppStatusSnapshot, config: &app_config::AppConfig) -> bool {
-    settings_slint::show(snapshot, config)
-}
-
 fn sync_settings_hosts() {
-    let read_model = settings_bridge::read_model().ok();
-    let snapshot = read_model
-        .as_ref()
-        .map(|model| model.snapshot.clone())
-        .unwrap_or_else(current_app_status_snapshot);
-    let config = read_model
-        .map(|model| model.config)
-        .unwrap_or_else(settings_bridge::current_config);
-
-    if settings_slint::is_available() {
-        let _ = settings_slint::update(&snapshot, &config);
-    }
+    let snapshot = current_app_status_snapshot();
 
     if let Some(settings_hwnd) = current_settings_hwnd() {
         settings_window::update_snapshot(settings_hwnd, snapshot);
+    } else {
+        settings_bridge::update_snapshot(snapshot);
     }
 }
 
@@ -898,7 +888,6 @@ fn draw_light(hdc: windows::Win32::Graphics::Gdi::HDC, rect: RECT, color: COLORR
 fn lamp_fill(state: SourceVisualState, lamp_index: usize) -> COLORREF {
     let off = rgb(48, 48, 52);
     match state {
-        SourceVisualState::Undiscovered => off,
         SourceVisualState::Idle | SourceVisualState::Working => {
             if lamp_index == 0 {
                 rgb(82, 214, 113)
@@ -906,20 +895,19 @@ fn lamp_fill(state: SourceVisualState, lamp_index: usize) -> COLORREF {
                 off
             }
         }
-        SourceVisualState::Attention => {
+        SourceVisualState::Completed | SourceVisualState::NeedsAttention => {
             if lamp_index == 1 {
                 rgb(255, 210, 76)
             } else {
                 off
             }
         }
-        SourceVisualState::Blocking => {
+        SourceVisualState::Error => {
             if lamp_index == 2 {
                 rgb(255, 108, 96)
             } else {
                 off
             }
         }
-        SourceVisualState::Untrusted => rgb(110, 110, 118),
     }
 }
