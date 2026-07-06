@@ -33,7 +33,7 @@ impl HostSettingsBridge {
 
 impl SettingsService for HostSettingsBridge {
     fn load_settings(&self) -> Result<AppConfig, SettingsServiceError> {
-        Ok(current_config())
+        Ok(refresh_config_from_disk())
     }
 
     fn save_settings(&self, config: &AppConfig) -> Result<(), SettingsServiceError> {
@@ -88,6 +88,15 @@ pub fn current_config() -> AppConfig {
         .get()
         .and_then(|config| config.lock().ok().map(|config| config.clone()))
         .unwrap_or_else(AppConfig::default_v1)
+}
+
+pub fn refresh_config_from_disk() -> AppConfig {
+    let next = app_config::load_config_diagnostic().config;
+    let lock = SETTINGS_CONFIG.get_or_init(|| Mutex::new(AppConfig::default_v1()));
+    if let Ok(mut current) = lock.lock() {
+        *current = next.clone();
+    }
+    next
 }
 
 pub fn update_config<F>(mutate: F) -> Result<AppConfig, String>
@@ -321,8 +330,10 @@ fn changed_keys(previous: &AppConfig, next: &AppConfig) -> Vec<String> {
     if previous.widget_visual.palette.red != next.widget_visual.palette.red {
         keys.push("widget_visual.palette.red".to_string());
     }
-    if previous.widget_visual.palette.off != next.widget_visual.palette.off {
-        keys.push("widget_visual.palette.off".to_string());
+    if previous.widget_visual.palette.inactive_brightness_percent
+        != next.widget_visual.palette.inactive_brightness_percent
+    {
+        keys.push("widget_visual.palette.inactive_brightness_percent".to_string());
     }
     if previous.diagnostics.last_opened_page != next.diagnostics.last_opened_page {
         keys.push("diagnostics.last_opened_page".to_string());

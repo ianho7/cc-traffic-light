@@ -1,0 +1,2 @@
+[permissions]
+allow = ["Bash(cd D:\\project\\cc-traffic-light; cargo run --bin gen_placeholder_logos)", "Bash(cd D:\\project\\cc-traffic-light; cargo run --bin gen_placeholder_logos 2>&1)", "Bash(cd D:\\project\\cc-traffic-light\\target; Get-ChildItem -Filter gen_placeholder* -Recurse -ErrorAction SilentlyContinue | Select-Object FullName)", "Bash(cd D:\\project\\cc-traffic-light\\taskbar-widget\\resources\\logos; cargo run --bin gen_placeholder_logos 2>&1)", "Bash(cd D:\\project\\cc-traffic-light; cargo build --bin gen_placeholder_logos 2>&1)"]

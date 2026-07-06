@@ -83,13 +83,13 @@ cargo build -p taskbar-widget --offline
 当前产品层只保留 5 个主状态：`空闲 / 工作中 / 需要关注 / 已完成 / 错误`。  
 `未发现`、`阻塞`、`不可信`、`降级`、`来源冲突` 等工程语义不再作为用户可见主状态。
 
-| 主状态 | 对应的 Codex Hook | 对应的 Claude Code Hook |
-| --- | --- | --- |
-| 空闲 | 无活跃任务时的默认回落；没有明确 `working / needs_attention / completed / error` 证据时回到空闲 | 同 Codex |
-| 工作中 | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` |
-| 需要关注 | `PermissionRequest` | `PermissionRequest` |
-| 已完成 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 |
-| 错误 | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` |
+| 主状态 | 对应的 Codex Hook | 对应的 Claude Code Hook | 图例 | 动画样式 |
+| --- | --- | --- | --- | --- |
+| 空闲 | 无活跃任务时的默认回落；没有明确 `working / needs_attention / completed / error` 证据时回到空闲 | 同 Codex | ⚪⚪⚪ | 无动画 |
+| 工作中 | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` | 🟢⚪⚪ | 左边绿灯慢闪 |
+| 需要关注 | `PermissionRequest` | `PermissionRequest` | ⚪🟡⚪ | 中间黄灯快闪 |
+| 已完成 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 | 🟢⚪⚪ | 左边绿灯常亮不闪 |
+| 错误 | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` | ⚪⚪🔴 | 右边红灯慢闪 |
 
 补充约束：
 

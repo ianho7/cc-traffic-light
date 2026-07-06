@@ -497,6 +497,14 @@ button {
   gap: 12px;
 }
 
+.range-setting-row {
+  cursor: default;
+}
+
+.range-setting-value {
+  min-width: min(44vw, 420px);
+}
+
 .color-chip {
   width: 24px;
   height: 24px;
@@ -511,6 +519,12 @@ button {
   padding: 0;
   border: 0;
   background: transparent;
+  cursor: pointer;
+}
+
+.range-input {
+  width: min(32vw, 240px);
+  accent-color: var(--black);
   cursor: pointer;
 }
 

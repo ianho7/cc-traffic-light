@@ -1,0 +1,6 @@
+- Task: Realign the widget `completed` lamp mapping with the documented contract
+- Encountered Problem: The settings UI and root README described `completed` as the middle yellow lamp, but the widget renderer still lit the first lamp for `SourceVisualState::Completed`, creating a visible mismatch between the UI contract, tray icon, and taskbar widget.
+- Thought Process: I compared the product-level state table, the Tauri settings labels, the tray icon color mapping, and the widget lamp mapping. Only `widget_effects.rs` diverged; the underlying state enum and hook mapping were already correct.
+- Options Considered: Update the README to match the widget; leave the mismatch and treat the widget as legacy behavior; change the widget lamp slot and add a regression test.
+- Chosen Solution: Change `SourceVisualState::Completed` to drive the second lamp in `taskbar-widget/src/widget_effects.rs` and add a unit test that asserts the yellow-slot contract explicitly.
+- Rationale: This keeps the product contract consistent across the overview page, tray icon, and widget without changing detector logic or state aggregation semantics.

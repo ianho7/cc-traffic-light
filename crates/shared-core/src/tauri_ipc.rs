@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app_config::AppConfig,
+    app_config::{AppConfig, WidgetPaletteConfig},
     settings_service::StatusSnapshotView,
 };
 
@@ -15,6 +15,7 @@ pub struct SettingsBootstrapDto {
     pub fake_mode: bool,
     pub pages: Vec<String>,
     pub about: SettingsAboutMetadataDto,
+    pub default_widget_palette: WidgetPaletteConfig,
     pub snapshot: StatusSnapshotView,
     pub settings: AppConfig,
 }

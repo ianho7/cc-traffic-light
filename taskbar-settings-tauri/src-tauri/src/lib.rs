@@ -8,7 +8,7 @@ use std::{
 
 use serde::Serialize;
 use shared_core::{
-    app_config::{config_file_path, AppConfig},
+    app_config::{config_file_path, default_widget_palette, AppConfig},
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
         SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand,
@@ -180,6 +180,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
                 "about".to_string(),
             ],
             about: about_metadata(),
+            default_widget_palette: default_widget_palette(),
             snapshot,
             settings,
         });
@@ -209,6 +210,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
             "about".to_string(),
         ],
         about: about_metadata(),
+        default_widget_palette: default_widget_palette(),
         snapshot: guard.snapshot.clone(),
         settings: guard.settings.clone(),
     })
@@ -270,7 +272,7 @@ fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, TauriComm
         "widget_visual.palette.green".to_string(),
         "widget_visual.palette.yellow".to_string(),
         "widget_visual.palette.red".to_string(),
-        "widget_visual.palette.off".to_string(),
+        "widget_visual.palette.inactive_brightness_percent".to_string(),
         "localization.language".to_string(),
         "diagnostics.last_opened_page".to_string()
     ];

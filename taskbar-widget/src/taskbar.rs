@@ -19,6 +19,7 @@ use windows::{
 
 use crate::win32;
 use crate::settings_bridge;
+use taskbar_widget::widget_render;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ParentStrategy {
@@ -612,8 +613,7 @@ pub fn position_in_taskbar(
     let runtime_config = settings_bridge::current_config();
     let module_width = match enabled_group_count {
         0 => 0,
-        1 => 80.min(parent_width.max(1)),
-        _ => 160.min(parent_width.max(1)),
+        _ => widget_render::total_widget_width(enabled_group_count).min(parent_width.max(1)),
     };
     let margin = 8;
     let occupied_rects = collect_peer_widget_rects(hwnd, probe, &parent_rect);

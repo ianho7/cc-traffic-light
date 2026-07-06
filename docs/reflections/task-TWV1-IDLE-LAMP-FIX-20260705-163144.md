@@ -1,0 +1,6 @@
+- Task: Fix the transparent widget renderer so a single-source idle view still shows three gray lamps and respects `show_labels=false`
+- Encountered Problem: The screenshot showed only a tiny `C` glyph instead of three gray lamps when only Codex monitoring was enabled, which made the widget look empty and suggested a detector failure even though hook state was present.
+- Thought Process: I checked the live config and state files first to separate "no status data" from "bad rendering". The state file showed active Codex hook data, so I narrowed the failure to the render path and inspected how idle lamps and labels were emitted.
+- Options Considered: Leave the current renderer and explain the behavior as intentional; patch only label visibility; patch both idle lamp rendering and label visibility in the new renderer.
+- Chosen Solution: Update `taskbar-widget/src/widget_render.rs` so idle groups always render off-state lamp shells, honor `appearance.show_labels`, and add renderer tests that lock both behaviors.
+- Rationale: The bug was entirely in the visual layer. Fixing it there keeps detector, taskbar attach, and state aggregation untouched while matching the product expectation that idle should still read as a three-lamp traffic light.

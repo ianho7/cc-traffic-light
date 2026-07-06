@@ -120,8 +120,10 @@ cargo build
 生成的 hook CLI：
 
 ```text
-target\debug\taskbar_widget_hook.exe
+..\target\debug\taskbar_widget_hook.exe
 ```
+
+注意：这是 workspace，构建产物默认落在仓库根 `target/`，不是 `taskbar-widget/target/`。
 
 默认状态文件：
 

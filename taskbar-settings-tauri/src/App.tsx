@@ -80,7 +80,7 @@ type LocaleStrings = {
     green: string;
     yellow: string;
     red: string;
-    off: string;
+    inactiveBrightness: string;
     reset: string;
   };
   diagnostics: {
@@ -210,14 +210,14 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
     },
     appearance: {
       title: "Widget Palette",
-      note: "第一阶段只允许调整默认圆灯配色，不引入背景色或图片资源",
+      note: "激活颜色直接写入本地配置文件，未激活亮度统一由一个参数推导",
       placement: "停靠位置",
       placementLeft: "左侧",
       placementRight: "右侧",
       green: "绿色灯",
       yellow: "黄色灯",
       red: "红色灯",
-      off: "熄灭灯",
+      inactiveBrightness: "未激活亮度",
       reset: "恢复默认配色"
     },
     diagnostics: {
@@ -379,14 +379,14 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
     },
     appearance: {
       title: "Widget Palette",
-      note: "Phase 1 only changes the default round-lamp colors. No background or image support yet.",
+      note: "Active colors persist directly to the local config file, while inactive lamps derive from one shared brightness control.",
       placement: "Dock side",
       placementLeft: "Left",
       placementRight: "Right",
       green: "Green lamp",
       yellow: "Yellow lamp",
       red: "Red lamp",
-      off: "Off lamp",
+      inactiveBrightness: "Inactive brightness",
       reset: "Restore default palette"
     },
     diagnostics: {
@@ -892,19 +892,22 @@ function App() {
                   pending={pending}
                   value={settings.widget_visual.palette.red}
                 />
-                <ColorSettingRow
-                  keyLabel="WIDGET_OFF"
-                  label={strings.appearance.off}
+                <RangeSettingRow
+                  keyLabel="WIDGET_INACTIVE_BRIGHTNESS"
+                  label={strings.appearance.inactiveBrightness}
+                  max={80}
+                  min={12}
                   onChange={(value) =>
                     updateConfig(
                       (draft) => {
-                        draft.widget_visual.palette.off = value;
+                        draft.widget_visual.palette.inactive_brightness_percent = value;
                       },
-                      ["widget_visual.palette.off"]
+                      ["widget_visual.palette.inactive_brightness_percent"]
                     )
                   }
                   pending={pending}
-                  value={settings.widget_visual.palette.off}
+                  step={1}
+                  value={settings.widget_visual.palette.inactive_brightness_percent}
                 />
               </Section>
 
@@ -915,13 +918,13 @@ function App() {
                   onClick={() =>
                     updateConfig(
                       (draft) => {
-                        draft.widget_visual.palette = defaultWidgetPalette();
+                        draft.widget_visual.palette = structuredClone(bootstrap.default_widget_palette);
                       },
                       [
                         "widget_visual.palette.green",
                         "widget_visual.palette.yellow",
                         "widget_visual.palette.red",
-                        "widget_visual.palette.off"
+                        "widget_visual.palette.inactive_brightness_percent"
                       ]
                     )
                   }
@@ -1180,6 +1183,43 @@ function ColorSettingRow(props: {
   );
 }
 
+function RangeSettingRow(props: {
+  label: string;
+  keyLabel: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+  pending?: boolean;
+}) {
+  const normalizedValue = clampNumber(props.value, props.min, props.max);
+
+  return (
+    <label className="setting-row range-setting-row">
+      <div>
+        <p className="row-title">{props.label}</p>
+        <p className="row-key">{props.keyLabel}</p>
+      </div>
+      <div className="row-value range-setting-value">
+        <input
+          className="range-input"
+          disabled={props.pending}
+          max={props.max}
+          min={props.min}
+          onChange={(event) => {
+            props.onChange(clampNumber(Number(event.currentTarget.value), props.min, props.max));
+          }}
+          step={props.step ?? 1}
+          type="range"
+          value={normalizedValue}
+        />
+        <ValuePill text={`${normalizedValue}%`} />
+      </div>
+    </label>
+  );
+}
+
 function TogglePill(props: { on: boolean; text: string }) {
   return (
     <span className={props.on ? "toggle-pill on" : "toggle-pill"}>
@@ -1268,17 +1308,16 @@ function compactText(value: string) {
   return value.length > 56 ? `${value.slice(0, 53)}...` : value;
 }
 
-function defaultWidgetPalette() {
-  return {
-    green: "#52D671",
-    yellow: "#FFD24C",
-    red: "#FF6C60",
-    off: "#303034"
-  };
-}
-
 function normalizeHexColor(value: string) {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000";
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 export default App;

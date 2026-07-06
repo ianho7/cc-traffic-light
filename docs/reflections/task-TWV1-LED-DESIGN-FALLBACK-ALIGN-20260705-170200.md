@@ -1,0 +1,6 @@
+- Task: Align taskbar widget LED fallback colors with the refined red/yellow/green hardware-indicator design tokens
+- Encountered Problem: The main renderer had already switched to the new LED color system and inactive-shell recipes, but `Palette::from_config()` still fell back to the older bright defaults when a palette value was missing or invalid. That meant a malformed or partial config could silently reintroduce the legacy look.
+- Thought Process: I checked the design-token path end to end instead of only the happy path. The active defaults in shared config and the Tauri settings app already matched the new spec, so the remaining inconsistency was specifically in renderer-side parse fallback behavior.
+- Options Considered: Leave the fallback untouched because normal configs serialize valid hex strings; hard-fail on invalid palette values; update the renderer fallback to the same new defaults used by settings and shared-core.
+- Chosen Solution: Repoint the renderer fallback values to `DEFAULT_GREEN`, `DEFAULT_YELLOW`, and `DEFAULT_RED`, keeping the off-color fallback unchanged.
+- Rationale: The widget should stay visually consistent with the LED spec even when config input is incomplete or invalid. Matching the same defaults across shared config, settings UI, and renderer removes an avoidable class of visual regressions.

@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE_NAME: &str = "config.json";
-const CONFIG_SCHEMA_VERSION: u32 = 3;
+const CONFIG_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -78,8 +78,8 @@ pub struct WidgetPaletteConfig {
     pub yellow: String,
     #[serde(default = "default_widget_red")]
     pub red: String,
-    #[serde(default = "default_widget_off")]
-    pub off: String,
+    #[serde(default = "default_widget_inactive_brightness_percent")]
+    pub inactive_brightness_percent: u8,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -135,6 +135,7 @@ pub enum AppLanguage {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigLoadOutcome {
     Loaded,
+    CreatedDefaultFile,
     MissingFile,
     ReadError(String),
     InvalidJson,
@@ -220,12 +221,7 @@ impl Default for WidgetVisualConfig {
 
 impl Default for WidgetPaletteConfig {
     fn default() -> Self {
-        Self {
-            green: default_widget_green(),
-            yellow: default_widget_yellow(),
-            red: default_widget_red(),
-            off: default_widget_off(),
-        }
+        default_widget_palette()
     }
 }
 
@@ -233,6 +229,7 @@ impl ConfigLoadOutcome {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Loaded => "loaded",
+            Self::CreatedDefaultFile => "created_default_file",
             Self::MissingFile => "missing_file",
             Self::ReadError(_) => "read_error",
             Self::InvalidJson => "invalid_json",
@@ -255,9 +252,14 @@ pub fn load_config_diagnostic() -> ConfigLoadResult {
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let config = AppConfig::default_v1();
+            let outcome = match write_config(&path, &config) {
+                Ok(()) => ConfigLoadOutcome::CreatedDefaultFile,
+                Err(write_error) => ConfigLoadOutcome::ReadError(write_error.to_string()),
+            };
             return ConfigLoadResult {
-                config: AppConfig::default_v1(),
-                outcome: ConfigLoadOutcome::MissingFile,
+                config,
+                outcome,
                 path,
             };
         }
@@ -270,14 +272,19 @@ pub fn load_config_diagnostic() -> ConfigLoadResult {
         }
     };
 
-    let Ok(mut config) = serde_json::from_str::<AppConfig>(strip_utf8_bom(&text)) else {
+    let Ok(parsed_config) = serde_json::from_str::<AppConfig>(strip_utf8_bom(&text)) else {
         return ConfigLoadResult {
             config: AppConfig::default_v1(),
             outcome: ConfigLoadOutcome::InvalidJson,
             path,
         };
     };
-    config.schema_version = CONFIG_SCHEMA_VERSION;
+
+    let original_schema_version = parsed_config.schema_version;
+    let config = normalize_config(parsed_config);
+    if config.schema_version != original_schema_version {
+        let _ = write_config(&path, &config);
+    }
 
     ConfigLoadResult {
         config,
@@ -288,7 +295,7 @@ pub fn load_config_diagnostic() -> ConfigLoadResult {
 
 pub fn save_config(config: &AppConfig) -> io::Result<()> {
     let path = config_file_path();
-    write_config(&path, config)
+    write_config(&path, &normalize_config(config.clone()))
 }
 
 fn write_config(path: &Path, config: &AppConfig) -> io::Result<()> {
@@ -304,20 +311,39 @@ fn strip_utf8_bom(value: &str) -> &str {
     value.strip_prefix('\u{feff}').unwrap_or(value)
 }
 
+pub fn default_widget_palette() -> WidgetPaletteConfig {
+    WidgetPaletteConfig {
+        green: default_widget_green(),
+        yellow: default_widget_yellow(),
+        red: default_widget_red(),
+        inactive_brightness_percent: default_widget_inactive_brightness_percent(),
+    }
+}
+
 fn default_widget_green() -> String {
-    "#52D671".to_string()
+    "#34C759".to_string()
 }
 
 fn default_widget_yellow() -> String {
-    "#FFD24C".to_string()
+    "#FFCC00".to_string()
 }
 
 fn default_widget_red() -> String {
-    "#FF6C60".to_string()
+    "#FF3B30".to_string()
 }
 
-fn default_widget_off() -> String {
-    "#303034".to_string()
+fn default_widget_inactive_brightness_percent() -> u8 {
+    42
+}
+
+fn normalize_config(mut config: AppConfig) -> AppConfig {
+    config.schema_version = CONFIG_SCHEMA_VERSION;
+    config.widget_visual.palette.inactive_brightness_percent = config
+        .widget_visual
+        .palette
+        .inactive_brightness_percent
+        .clamp(12, 80);
+    config
 }
 
 #[cfg(test)]
@@ -347,10 +373,9 @@ mod tests {
                 },
                 "widget_visual": {
                     "palette": {
-                        "green": "#52D671",
-                        "yellow": "#FFD24C",
-                        "red": "#FF6C60",
-                        "off": "#303034"
+                        "green": "#34C759",
+                        "yellow": "#FFCC00",
+                        "red": "#FF3B30"
                     }
                 },
                 "diagnostics": {
@@ -411,10 +436,10 @@ mod tests {
         )
         .expect("config should deserialize");
 
-        assert_eq!(config.widget_visual.palette.green, "#52D671");
-        assert_eq!(config.widget_visual.palette.yellow, "#FFD24C");
-        assert_eq!(config.widget_visual.palette.red, "#FF6C60");
-        assert_eq!(config.widget_visual.palette.off, "#303034");
+        assert_eq!(config.widget_visual.palette.green, "#34C759");
+        assert_eq!(config.widget_visual.palette.yellow, "#FFCC00");
+        assert_eq!(config.widget_visual.palette.red, "#FF3B30");
+        assert_eq!(config.widget_visual.palette.inactive_brightness_percent, 42);
         assert_eq!(config.widget_visual.placement, WidgetPlacement::Right);
     }
 
@@ -425,7 +450,7 @@ mod tests {
         config.widget_visual.palette.green = "#00FF88".to_string();
         config.widget_visual.palette.yellow = "#FFD700".to_string();
         config.widget_visual.palette.red = "#FF4D6D".to_string();
-        config.widget_visual.palette.off = "#24262A".to_string();
+        config.widget_visual.palette.inactive_brightness_percent = 56;
 
         let encoded = serde_json::to_string(&config).expect("config should serialize");
         let decoded =

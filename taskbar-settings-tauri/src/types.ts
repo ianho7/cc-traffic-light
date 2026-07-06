@@ -47,17 +47,19 @@ export interface AppConfig {
   };
   widget_visual: {
     placement: "left" | "right";
-    palette: {
-      green: string;
-      yellow: string;
-      red: string;
-      off: string;
-    };
+    palette: WidgetPaletteConfig;
   };
   diagnostics: {
     last_opened_page: SettingsPageId;
     last_manual_refresh_at: number | null;
   };
+}
+
+export interface WidgetPaletteConfig {
+  green: string;
+  yellow: string;
+  red: string;
+  inactive_brightness_percent: number;
 }
 
 export interface SettingsTransportDto {
@@ -78,6 +80,7 @@ export interface SettingsBootstrapDto {
   fake_mode: boolean;
   pages: SettingsPageId[];
   about: SettingsAboutMetadataDto;
+  default_widget_palette: WidgetPaletteConfig;
   snapshot: StatusSnapshotView;
   settings: AppConfig;
 }

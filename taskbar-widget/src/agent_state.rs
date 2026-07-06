@@ -21,7 +21,7 @@ const SCHEMA_VERSION: u32 = 1;
 const LOCK_TIMEOUT_MS: u32 = 2_000;
 const DONE_RETENTION_MS: u64 = 60 * 1_000;
 const ERROR_RETENTION_MS: u64 = 30 * 60 * 1_000;
-const WORKING_STALE_MS: u64 = 30 * 60 * 1_000;
+const WORKING_STALE_MS: u64 = 10 * 60 * 1_000;
 const WAITING_STALE_MS: u64 = 24 * 60 * 60 * 1_000;
 const MAX_MESSAGE_CHARS: usize = 160;
 

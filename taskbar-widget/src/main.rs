@@ -20,6 +20,7 @@ use taskbar_widget::{
     app_config, detector,
     runtime_contract::RuntimeContract,
     ui_state::{AppStatusSnapshot, WidgetMountState},
+    widget_effects::{self, WidgetEffectsState},
     widget_render::{self, WidgetHotZone},
 };
 use windows::{
@@ -46,12 +47,15 @@ const WINDOW_TITLE: windows::core::PCWSTR = w!("Taskbar Widget");
 const WINDOW_WIDTH: i32 = 160;
 const WINDOW_HEIGHT: i32 = 48;
 const HOOK_STATE_TIMER_ID: usize = 1;
+const ANIMATION_TIMER_ID: usize = 2;
 const HOOK_STATE_TIMER_MS: u32 = 1_000;
+const ANIMATION_TIMER_MS: u32 = 80;
 const WIDGET_RETRY_INTERVAL_MS: u64 = 5_000;
 
 #[derive(Clone)]
 struct PaintState {
     snapshot: AppStatusSnapshot,
+    effects: WidgetEffectsState,
     hot_zones: Vec<WidgetHotZone>,
 }
 
@@ -170,8 +174,8 @@ fn main() -> Result<()> {
         ));
     }
     unsafe {
-        let timer = SetTimer(hwnd, HOOK_STATE_TIMER_ID, HOOK_STATE_TIMER_MS, None);
-        if timer == 0 {
+        let hook_timer = SetTimer(hwnd, HOOK_STATE_TIMER_ID, HOOK_STATE_TIMER_MS, None);
+        if hook_timer == 0 {
             win32::debug_log(&format!(
                 "[hook-state] SetTimer failed: last_error={}",
                 win32::last_error_code()
@@ -187,6 +191,15 @@ fn main() -> Result<()> {
                 win32::format_hwnd(hwnd),
                 HOOK_STATE_TIMER_ID,
                 HOOK_STATE_TIMER_MS
+            ));
+        }
+
+        let animation_timer = SetTimer(hwnd, ANIMATION_TIMER_ID, ANIMATION_TIMER_MS, None);
+        if animation_timer == 0 {
+            runtime_log(&format!(
+                "animation SetTimer failed hwnd={} last_error={}",
+                win32::format_hwnd(hwnd),
+                win32::last_error_code()
             ));
         }
     }
@@ -264,6 +277,9 @@ unsafe extern "system" fn window_proc(
                 attempt_widget_recovery(hwnd);
                 poll_hook_state(hwnd);
                 LRESULT(0)
+            } else if wparam.0 == ANIMATION_TIMER_ID {
+                tick_widget_animation(hwnd);
+                LRESULT(0)
             } else {
                 unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
             }
@@ -325,6 +341,7 @@ unsafe extern "system" fn window_proc(
             ));
             unsafe {
                 let _ = KillTimer(hwnd, HOOK_STATE_TIMER_ID);
+                let _ = KillTimer(hwnd, ANIMATION_TIMER_ID);
             }
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
@@ -343,7 +360,7 @@ unsafe extern "system" fn window_proc(
 
 fn initialize_paint_state() {
     let result = agent_state::load_state_for_display_diagnostic();
-    let config = app_config::load_config_diagnostic().config;
+    let config = settings_bridge::refresh_config_from_disk();
     let (mount_state, last_attach_at) = current_widget_runtime_state();
     let snapshot = detector::build_status_snapshot(&config, &result, mount_state, last_attach_at);
     runtime_log(&format!(
@@ -364,8 +381,14 @@ fn initialize_paint_state() {
     ));
     let _ = PAINT_STATE.set(Mutex::new(PaintState {
         snapshot: snapshot.clone(),
+        effects: WidgetEffectsState::default(),
         hot_zones: Vec::new(),
     }));
+    if let Some(lock) = PAINT_STATE.get()
+        && let Ok(mut state) = lock.lock()
+    {
+        state.effects.sync_snapshot(&snapshot, widget_effects::now_ms());
+    }
     runtime_log(&format!(
         "initialize_app_snapshot overall={} codex={} claude={}",
         snapshot.overall_state.as_str(),
@@ -388,7 +411,9 @@ fn initialize_paint_state() {
 
 fn poll_hook_state(hwnd: HWND) {
     let result = agent_state::load_state_for_display_diagnostic();
-    let config = app_config::load_config_diagnostic().config;
+    let previous_config = settings_bridge::current_config();
+    let config = settings_bridge::refresh_config_from_disk();
+    let config_changed = previous_config != config;
     let (mount_state, last_attach_at) = current_widget_runtime_state();
     let next_snapshot =
         detector::build_status_snapshot(&config, &result, mount_state, last_attach_at);
@@ -415,9 +440,9 @@ fn poll_hook_state(hwnd: HWND) {
         return;
     };
 
-    if display_snapshot_changed(&current.snapshot, &next_snapshot) {
+    if display_snapshot_changed(&current.snapshot, &next_snapshot) || config_changed {
         win32::debug_log(&format!(
-            "[hook-state] snapshot changed overall={} codex={} claude={}",
+            "[hook-state] snapshot/config changed overall={} codex={} claude={} config_changed={}",
             next_snapshot.overall_state.as_str(),
             next_snapshot
                 .sources
@@ -428,18 +453,27 @@ fn poll_hook_state(hwnd: HWND) {
                 .sources
                 .get("claude")
                 .map(|source| source.state.as_str())
-                .unwrap_or("idle")
+                .unwrap_or("idle"),
+            config_changed,
         ));
         runtime_log(&format!(
-            "snapshot changed old_overall={} new_overall={} invalidate_requested=true",
+            "snapshot/config changed old_overall={} new_overall={} config_changed={} invalidate_requested=true",
             current.snapshot.overall_state.as_str(),
-            next_snapshot.overall_state.as_str()
+            next_snapshot.overall_state.as_str(),
+            config_changed,
         ));
         current.snapshot = next_snapshot.clone();
+        let snapshot_for_effects = current.snapshot.clone();
+        current
+            .effects
+            .sync_snapshot(&snapshot_for_effects, widget_effects::now_ms());
         unsafe {
             let _ = InvalidateRect(hwnd, None, true);
         }
     } else {
+        current
+            .effects
+            .sync_snapshot(&next_snapshot, widget_effects::now_ms());
         runtime_log(&format!(
             "snapshot unchanged overall={}",
             next_snapshot.overall_state.as_str()
@@ -462,20 +496,30 @@ fn paint_window(hwnd: HWND) -> LRESULT {
     let mut client_rect = RECT::default();
     let snapshot = PAINT_STATE
         .get()
-        .and_then(|state| state.lock().ok().map(|state| state.snapshot.clone()))
-        .unwrap_or_else(AppStatusSnapshot::empty);
+        .and_then(|state| {
+            state
+                .lock()
+                .ok()
+                .map(|state| (state.snapshot.clone(), state.effects.clone()))
+        })
+        .unwrap_or_else(|| (AppStatusSnapshot::empty(), WidgetEffectsState::default()));
     runtime_log(&format!(
         "WM_PAINT enter hwnd={} overall={}",
         win32::format_hwnd(hwnd),
-        snapshot.overall_state.as_str()
+        snapshot.0.overall_state.as_str()
     ));
 
     unsafe {
         let _ = BeginPaint(hwnd, &mut paint);
         let _ = GetClientRect(hwnd, &mut client_rect);
     }
-    let frame =
-        widget_render::build_widget_frame(&snapshot, &settings_bridge::current_config(), &client_rect);
+    let frame = widget_render::build_widget_frame(
+        &snapshot.0,
+        &snapshot.1,
+        widget_effects::now_ms(),
+        &settings_bridge::current_config(),
+        &client_rect,
+    );
     widget_render::apply_widget_frame(hwnd, &frame);
     if let Some(lock) = PAINT_STATE.get()
         && let Ok(mut state) = lock.lock()
@@ -489,9 +533,24 @@ fn paint_window(hwnd: HWND) -> LRESULT {
     runtime_log(&format!(
         "WM_PAINT exit hwnd={} overall={}",
         win32::format_hwnd(hwnd),
-        snapshot.overall_state.as_str()
+        snapshot.0.overall_state.as_str()
     ));
     LRESULT(0)
+}
+
+fn tick_widget_animation(hwnd: HWND) {
+    let Some(lock) = PAINT_STATE.get() else {
+        return;
+    };
+    let Ok(state) = lock.lock() else {
+        return;
+    };
+    let now_ms = widget_effects::now_ms();
+    if state.effects.needs_animation_frame(&state.snapshot, now_ms) {
+        unsafe {
+            let _ = InvalidateRect(hwnd, None, true);
+        }
+    }
 }
 
 fn install_panic_hook() {

@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex SessionStart",
             "statusMessage": "Writing Codex SessionStart state"
           }
         ]
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex UserPromptSubmit",
             "statusMessage": "Writing Codex UserPromptSubmit state"
           }
         ]
@@ -31,8 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PreToolUse",
             "statusMessage": "Writing Codex PreToolUse state"
           }
         ]
@@ -44,8 +44,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PermissionRequest",
             "statusMessage": "Writing Codex PermissionRequest state"
           }
         ]
@@ -57,8 +57,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex PostToolUse",
             "statusMessage": "Writing Codex PostToolUse state"
           }
         ]
@@ -70,8 +70,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex SubagentStop",
             "statusMessage": "Writing Codex SubagentStop state"
           }
         ]
@@ -82,8 +82,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex Stop",
-            "commandWindows": "D:\\project\\cc-traffic-light\\taskbar-widget\\target\\debug\\taskbar_widget_hook.exe codex Stop",
+            "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex Stop",
+            "commandWindows": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe codex Stop",
             "statusMessage": "Writing Codex Stop state"
           }
         ]

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "updated_at": 1783342307142,
+  "tasks": {
+    "claude_3ee4a331-5275-4d89-b109-0c62bd6ea01e": {
+      "agent": "claude",
+      "task_key": "claude_3ee4a331-5275-4d89-b109-0c62bd6ea01e",
+      "session_id": "3ee4a331-5275-4d89-b109-0c62bd6ea01e",
+      "session_id_source": "payload",
+      "state": "working",
+      "updated_at": 1783342307142,
+      "event_order": 1783342307140,
+      "event_order_source": "received_at",
+      "hook_name": "UserPromptSubmit",
+      "message": "hook=UserPromptSubmit",
+      "summary_eligible": true,
+      "stale": false
+    }
+  },
+  "global_summary": {
+    "state": "working",
+    "active_task_count": 1,
+    "has_stale": false,
+    "stale_task_count": 0,
+    "highest_priority_task": "claude_3ee4a331-5275-4d89-b109-0c62bd6ea01e",
+    "updated_at": 1783342307142
+  },
+  "agents": {
+    "claude": {
+      "summary": {
+        "state": "working",
+        "active_task_count": 1,
+        "has_stale": false,
+        "stale_task_count": 0,
+        "highest_priority_task": "claude_3ee4a331-5275-4d89-b109-0c62bd6ea01e",
+        "updated_at": 1783342307142
+      }
+    },
+    "codex": {
+      "summary": {
+        "state": "idle",
+        "active_task_count": 0,
+        "has_stale": false,
+        "stale_task_count": 0,
+        "highest_priority_task": null,
+        "updated_at": 1783342307142
+      }
+    }
+  },
+  "diagnostics": {
+    "last_ignored_event": "ignored stale event task=codex_019f2bc4-04ce-7b61-ab8a-47df9a2bcf50 hook=PostToolUse incoming=1783145700 current=1783145717907",
+    "last_corrupt_recovery_at": null,
+    "phase0_payload_sampling": "synthetic_payload_until_real_hook_samples_are_available"
+  }
+}
