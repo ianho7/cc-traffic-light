@@ -1,6 +1,7 @@
 use std::sync::{Mutex, OnceLock};
 
 use shared_core::{
+    app_config::changed_keys,
     settings_service::{SettingsService, SettingsServiceError},
     tauri_ipc::SettingsSaveResultDto,
 };
@@ -24,12 +25,6 @@ static MAIN_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 static SETTINGS_WINDOW_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 
 pub struct HostSettingsBridge;
-
-impl HostSettingsBridge {
-    pub fn new() -> Self {
-        Self
-    }
-}
 
 impl SettingsService for HostSettingsBridge {
     fn load_settings(&self) -> Result<AppConfig, SettingsServiceError> {
@@ -110,7 +105,7 @@ where
         return Err("settings config lock poisoned".to_string());
     };
     mutate(&mut config);
-    HostSettingsBridge::new()
+    HostSettingsBridge
         .save_settings(&config)
         .map_err(service_error_to_string)?;
     invalidate_main_window();
@@ -118,6 +113,9 @@ where
     Ok(config.clone())
 }
 
+/// Update the in-memory config cache **without** persisting to disk.
+/// Use this for runtime-only state (e.g. `last_manual_refresh_at`) that
+/// does not need to survive a restart.
 fn update_runtime_config<F>(mutate: F) -> Result<AppConfig, String>
 where
     F: FnOnce(&mut AppConfig),
@@ -144,7 +142,7 @@ pub fn toggle_autostart_setting() -> Result<AppConfig, String> {
     let next_enabled = !config.general.autostart_enabled;
     autostart::set_enabled(next_enabled).map_err(|error| error.to_string())?;
     config.general.autostart_enabled = next_enabled;
-    HostSettingsBridge::new()
+    HostSettingsBridge
         .save_settings(&config)
         .map_err(service_error_to_string)?;
     invalidate_main_window();
@@ -192,7 +190,7 @@ pub fn apply_full_settings(next: AppConfig) -> Result<SettingsSaveResultDto, Str
 
     let applied_keys = changed_keys(&previous, &next);
     *config = next.clone();
-    HostSettingsBridge::new()
+    HostSettingsBridge
         .save_settings(&config)
         .map_err(service_error_to_string)?;
     invalidate_main_window();
@@ -280,67 +278,4 @@ fn service_error_to_string(error: SettingsServiceError) -> String {
         | SettingsServiceError::SnapshotUnavailable(message)
         | SettingsServiceError::Refresh(message) => message,
     }
-}
-
-fn changed_keys(previous: &AppConfig, next: &AppConfig) -> Vec<String> {
-    let mut keys = Vec::new();
-
-    if previous.localization.language != next.localization.language {
-        keys.push("localization.language".to_string());
-    }
-    if previous.general.autostart_enabled != next.general.autostart_enabled {
-        keys.push("general.autostart_enabled".to_string());
-    }
-    if previous.general.start_minimized_to_tray != next.general.start_minimized_to_tray {
-        keys.push("general.start_minimized_to_tray".to_string());
-    }
-    if previous.general.close_to_tray != next.general.close_to_tray {
-        keys.push("general.close_to_tray".to_string());
-    }
-    if previous.monitoring.codex_enabled != next.monitoring.codex_enabled {
-        keys.push("monitoring.codex_enabled".to_string());
-    }
-    if previous.monitoring.claude_enabled != next.monitoring.claude_enabled {
-        keys.push("monitoring.claude_enabled".to_string());
-    }
-    if previous.appearance.ui_theme != next.appearance.ui_theme {
-        keys.push("appearance.ui_theme".to_string());
-    }
-    if previous.appearance.indicator_style != next.appearance.indicator_style {
-        keys.push("appearance.indicator_style".to_string());
-    }
-    if previous.appearance.widget_size != next.appearance.widget_size {
-        keys.push("appearance.widget_size".to_string());
-    }
-    if previous.appearance.show_labels != next.appearance.show_labels {
-        keys.push("appearance.show_labels".to_string());
-    }
-    if previous.appearance.reduced_motion != next.appearance.reduced_motion {
-        keys.push("appearance.reduced_motion".to_string());
-    }
-    if previous.widget_visual.palette.green != next.widget_visual.palette.green {
-        keys.push("widget_visual.palette.green".to_string());
-    }
-    if previous.widget_visual.placement != next.widget_visual.placement {
-        keys.push("widget_visual.placement".to_string());
-    }
-    if previous.widget_visual.palette.yellow != next.widget_visual.palette.yellow {
-        keys.push("widget_visual.palette.yellow".to_string());
-    }
-    if previous.widget_visual.palette.red != next.widget_visual.palette.red {
-        keys.push("widget_visual.palette.red".to_string());
-    }
-    if previous.widget_visual.palette.inactive_brightness_percent
-        != next.widget_visual.palette.inactive_brightness_percent
-    {
-        keys.push("widget_visual.palette.inactive_brightness_percent".to_string());
-    }
-    if previous.diagnostics.last_opened_page != next.diagnostics.last_opened_page {
-        keys.push("diagnostics.last_opened_page".to_string());
-    }
-    if previous.diagnostics.last_manual_refresh_at != next.diagnostics.last_manual_refresh_at {
-        keys.push("diagnostics.last_manual_refresh_at".to_string());
-    }
-
-    keys
 }

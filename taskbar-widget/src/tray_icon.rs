@@ -1,4 +1,4 @@
-use crate::win32;
+use crate::win32::{self, wide_null};
 use image::load_from_memory;
 use std::sync::OnceLock;
 use taskbar_widget::{app_config::AppConfig, i18n::Localizer, ui_state::AppStatusSnapshot};
@@ -167,11 +167,6 @@ fn copy_tooltip(target: &mut [u16], value: &str) {
     }
 }
 
-fn wide_null(value: &str) -> Vec<u16> {
-    let mut wide = win32::wide_text(value);
-    wide.push(0);
-    wide
-}
 
 fn tray_icon_handle_for_overall(overall: &str) -> windows::Win32::UI::WindowsAndMessaging::HICON {
     let cache = TRAY_ICON_CACHE.get_or_init(build_tray_icon_cache);

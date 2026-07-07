@@ -36,15 +36,11 @@ pub fn get_logo(id: WidgetGroupId) -> &'static LogoData {
     match id {
         WidgetGroupId::Codex => {
             static LOGO: OnceLock<&LogoData> = OnceLock::new();
-            *LOGO.get_or_init(|| {
-                decode_logo(include_bytes!("../resources/logos/codex.png"))
-            })
+            *LOGO.get_or_init(|| decode_logo(include_bytes!("../resources/codex.png")))
         }
         WidgetGroupId::Claude => {
             static LOGO: OnceLock<&LogoData> = OnceLock::new();
-            *LOGO.get_or_init(|| {
-                decode_logo(include_bytes!("../resources/logos/claude.png"))
-            })
+            *LOGO.get_or_init(|| decode_logo(include_bytes!("../resources/claude.png")))
         }
     }
 }

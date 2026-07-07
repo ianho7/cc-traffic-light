@@ -38,11 +38,7 @@ pub fn extract_event_order(payload: &Value) -> Option<u64> {
     find_u64_value(payload, EVENT_ORDER_KEYS)
 }
 
-pub fn infer_state(
-    hook_name: &str,
-    _previous: Option<&AgentState>,
-    _payload: &Value,
-) -> AgentState {
+pub fn infer_state(hook_name: &str) -> AgentState {
     match hook_name.to_ascii_lowercase().as_str() {
         "sessionstart" => AgentState::Idle,
         "userpromptsubmit" | "pretooluse" | "posttooluse" | "precompact" | "postcompact"
@@ -159,41 +155,20 @@ mod tests {
 
     #[test]
     fn stop_is_done_even_when_payload_contains_error_words() {
-        let payload = json!({
-            "hook_event_name": "Stop",
-            "last_assistant_message": "tool failed with permission denied"
-        });
-
-        let state = infer_state("Stop", Some(&AgentState::Working), &payload);
+        let state = infer_state("Stop");
 
         assert_eq!(state, AgentState::Done);
     }
 
     #[test]
     fn explicit_failure_hooks_map_to_error() {
-        let payload = json!({});
-
-        assert_eq!(
-            infer_state("PostToolUseFailure", Some(&AgentState::Working), &payload),
-            AgentState::Error
-        );
-        assert_eq!(
-            infer_state("ToolUseFailure", Some(&AgentState::Working), &payload),
-            AgentState::Error
-        );
-        assert_eq!(
-            infer_state("StopFailure", Some(&AgentState::Working), &payload),
-            AgentState::Error
-        );
+        assert_eq!(infer_state("PostToolUseFailure"), AgentState::Error);
+        assert_eq!(infer_state("ToolUseFailure"), AgentState::Error);
+        assert_eq!(infer_state("StopFailure"), AgentState::Error);
     }
 
     #[test]
     fn permission_request_remains_waiting() {
-        let payload = json!({});
-
-        assert_eq!(
-            infer_state("PermissionRequest", Some(&AgentState::Working), &payload),
-            AgentState::Waiting
-        );
+        assert_eq!(infer_state("PermissionRequest"), AgentState::Waiting);
     }
 }

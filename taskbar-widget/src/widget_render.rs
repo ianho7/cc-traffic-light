@@ -50,7 +50,6 @@ pub(crate) struct PixelBuffer {
 
 struct GroupLayout {
     id: WidgetGroupId,
-    show_logo: bool,
     logo_left: i32,
     logo_top: i32,
     render_state: GroupRenderState,
@@ -363,7 +362,6 @@ fn build_group_layouts(
 
             GroupLayout {
                 id,
-                show_logo: true,
                 logo_left: content_left,
                 logo_top: group_top + (GROUP_HEIGHT - logo_h) / 2,
                 render_state,

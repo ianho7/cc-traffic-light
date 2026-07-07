@@ -12,41 +12,10 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ObservationKind {
-    LogFile,
-    StateFile,
-    SessionFile,
-    Process,
-    HookState,
-}
-
-impl ObservationKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::LogFile => "log_file",
-            Self::StateFile => "state_file",
-            Self::SessionFile => "session_file",
-            Self::Process => "process",
-            Self::HookState => "hook_state",
-        }
-    }
-
-    pub fn method(self) -> DetectionMethod {
-        match self {
-            Self::LogFile => DetectionMethod::LogFile,
-            Self::StateFile => DetectionMethod::StateFile,
-            Self::SessionFile => DetectionMethod::SessionFile,
-            Self::Process => DetectionMethod::Process,
-            Self::HookState => DetectionMethod::HookState,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceObservation {
     pub source_id: SourceId,
-    pub kind: ObservationKind,
+    pub kind: DetectionMethod,
     pub state: SourceVisualState,
     pub confidence: SourceConfidence,
     pub updated_at: u64,
@@ -101,10 +70,10 @@ fn collect_source_observations(
     let mut observations = Vec::new();
     if matches!(result.outcome, DisplayLoadOutcome::Loaded) {
         let key = source_id.as_str();
-        if let Some(summary) = result.state.agents.get(key).map(|monitor| &monitor.summary) {
+        if let Some(summary) = result.state.agents.get(key) {
             observations.push(SourceObservation::from_hook_summary(
                 source_id,
-                ObservationKind::StateFile,
+                DetectionMethod::StateFile,
                 summary,
             ));
         }
@@ -168,7 +137,7 @@ fn aggregate_source_status(
             source_id,
             state: SourceVisualState::Idle,
             confidence: SourceConfidence::Degraded,
-            method: best.kind.method(),
+            method: best.kind,
             updated_at: best.updated_at,
             message: None,
         };
@@ -178,7 +147,7 @@ fn aggregate_source_status(
         source_id,
         state: best.state,
         confidence: best.confidence,
-        method: best.kind.method(),
+        method: best.kind,
         updated_at: best.updated_at,
         message: best.message,
     }
@@ -201,22 +170,14 @@ fn aggregate_overall_state<'a>(
     best
 }
 
-fn source_priority(source_id: SourceId, kind: ObservationKind) -> u8 {
-    match source_id {
-        SourceId::Codex => match kind {
-            ObservationKind::LogFile => 0,
-            ObservationKind::StateFile => 1,
-            ObservationKind::SessionFile => 2,
-            ObservationKind::Process => 3,
-            ObservationKind::HookState => 4,
-        },
-        SourceId::Claude => match kind {
-            ObservationKind::LogFile => 0,
-            ObservationKind::StateFile => 1,
-            ObservationKind::SessionFile => 2,
-            ObservationKind::Process => 3,
-            ObservationKind::HookState => 4,
-        },
+fn source_priority(_source_id: SourceId, kind: DetectionMethod) -> u8 {
+    match kind {
+        DetectionMethod::LogFile => 0,
+        DetectionMethod::StateFile => 1,
+        DetectionMethod::SessionFile => 2,
+        DetectionMethod::Process => 3,
+        DetectionMethod::HookState => 4,
+        DetectionMethod::Unknown => 0,
     }
 }
 
@@ -233,7 +194,7 @@ fn overall_priority(state: SourceVisualState) -> u8 {
 impl SourceObservation {
     fn from_hook_summary(
         source_id: SourceId,
-        kind: ObservationKind,
+        kind: DetectionMethod,
         summary: &HookSummary,
     ) -> Self {
         Self {
@@ -264,7 +225,7 @@ fn process_fallback_observation(source_id: SourceId) -> Option<SourceObservation
 
     Some(SourceObservation {
         source_id,
-        kind: ObservationKind::Process,
+        kind: DetectionMethod::Process,
         state: SourceVisualState::Idle,
         confidence: SourceConfidence::Degraded,
         updated_at: crate::agent_state::now_ms(),

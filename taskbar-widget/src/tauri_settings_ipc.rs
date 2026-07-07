@@ -43,7 +43,7 @@ fn server_loop() {
 }
 
 fn serve_once() -> Result<(), String> {
-    let pipe_name = wide_null(TAURI_SETTINGS_PIPE_NAME);
+    let pipe_name = win32::wide_null(TAURI_SETTINGS_PIPE_NAME);
     let pipe = unsafe {
         CreateNamedPipeW(
             PCWSTR(pipe_name.as_ptr()),
@@ -191,8 +191,4 @@ fn response_error(request_id: String, message: String) -> SettingsIpcResponseEnv
     }
 }
 
-fn wide_null(value: &str) -> Vec<u16> {
-    let mut wide = win32::wide_text(value);
-    wide.push(0);
-    wide
-}
+

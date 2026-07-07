@@ -37,11 +37,11 @@ impl Localizer {
         }
     }
 
-    pub fn locale(self) -> AppLocale {
+    pub fn locale(&self) -> AppLocale {
         self.locale
     }
 
-    pub fn text(self, key: &str) -> String {
+    pub fn text(&self, key: &str) -> String {
         bundle_for(self.locale)
             .get(key)
             .or_else(|| bundle_for(AppLocale::En).get(key))
@@ -49,11 +49,11 @@ impl Localizer {
             .unwrap_or_else(|| key.to_string())
     }
 
-    pub fn bool_label(self, value: bool) -> String {
+    pub fn bool_label(&self, value: bool) -> String {
         self.text(if value { "common.on" } else { "common.off" })
     }
 
-    pub fn language_label(self, language: AppLanguage) -> String {
+    pub fn language_label(&self, language: AppLanguage) -> String {
         self.text(match language {
             AppLanguage::FollowSystem => "language.follow_system",
             AppLanguage::ZhCn => "language.zh_cn",
@@ -61,35 +61,35 @@ impl Localizer {
         })
     }
 
-    pub fn indicator_style_label(self, style: IndicatorStyle) -> String {
+    pub fn indicator_style_label(&self, style: IndicatorStyle) -> String {
         self.text(match style {
             IndicatorStyle::Classic => "indicator_style.classic",
             IndicatorStyle::Minimal => "indicator_style.minimal",
         })
     }
 
-    pub fn widget_size_label(self, size: WidgetSize) -> String {
+    pub fn widget_size_label(&self, size: WidgetSize) -> String {
         self.text(match size {
             WidgetSize::Compact => "widget_size.compact",
             WidgetSize::Standard => "widget_size.standard",
         })
     }
 
-    pub fn ui_theme_label(self, theme: UiTheme) -> String {
+    pub fn ui_theme_label(&self, theme: UiTheme) -> String {
         self.text(match theme {
             UiTheme::Light => "ui_theme.light",
             UiTheme::Dark => "ui_theme.dark",
         })
     }
 
-    pub fn source_label(self, source_id: SourceId) -> String {
+    pub fn source_label(&self, source_id: SourceId) -> String {
         self.text(match source_id {
             SourceId::Codex => "source.codex",
             SourceId::Claude => "source.claude",
         })
     }
 
-    pub fn state_label(self, state: SourceVisualState) -> String {
+    pub fn state_label(&self, state: SourceVisualState) -> String {
         self.text(match state {
             SourceVisualState::Idle => "state.idle",
             SourceVisualState::Working => "state.working",
@@ -99,7 +99,7 @@ impl Localizer {
         })
     }
 
-    pub fn widget_mount_label(self, state: WidgetMountState) -> String {
+    pub fn widget_mount_label(&self, state: WidgetMountState) -> String {
         self.text(match state {
             WidgetMountState::Attached => "widget_mount.attached",
             WidgetMountState::TrayOnly => "widget_mount.tray_only",
@@ -107,7 +107,7 @@ impl Localizer {
         })
     }
 
-    pub fn method_label(self, method: DetectionMethod) -> String {
+    pub fn method_label(&self, method: DetectionMethod) -> String {
         self.text(match method {
             DetectionMethod::LogFile => "method.log_file",
             DetectionMethod::StateFile => "method.state_file",
@@ -118,7 +118,7 @@ impl Localizer {
         })
     }
 
-    pub fn confidence_label(self, confidence: SourceConfidence) -> String {
+    pub fn confidence_label(&self, confidence: SourceConfidence) -> String {
         self.text(match confidence {
             SourceConfidence::Confirmed => "confidence.confirmed",
             SourceConfidence::Degraded => "confidence.degraded",
@@ -126,7 +126,7 @@ impl Localizer {
         })
     }
 
-    pub fn source_detail(self, source: &SourceStatus) -> String {
+    pub fn source_detail(&self, source: &SourceStatus) -> String {
         let mut parts = vec![
             format!(
                 "{} {}",
@@ -146,7 +146,7 @@ impl Localizer {
         parts.join(" | ")
     }
 
-    pub fn status_detail(self, snapshot: &AppStatusSnapshot) -> String {
+    pub fn status_detail(&self, snapshot: &AppStatusSnapshot) -> String {
         let codex_line = snapshot
             .sources
             .get("codex")
@@ -184,7 +184,7 @@ impl Localizer {
         format!("{codex_line} | {claude_line}")
     }
 
-    pub fn timestamp_line(self, prefix_key: &str, value: Option<u64>) -> String {
+    pub fn timestamp_line(&self, prefix_key: &str, value: Option<u64>) -> String {
         let prefix = self.text(prefix_key);
         match value {
             Some(timestamp) => format!("{prefix}: {timestamp}"),
@@ -192,7 +192,7 @@ impl Localizer {
         }
     }
 
-    pub fn tray_tooltip(self, snapshot: &AppStatusSnapshot) -> String {
+    pub fn tray_tooltip(&self, snapshot: &AppStatusSnapshot) -> String {
         let codex = snapshot
             .sources
             .get("codex")

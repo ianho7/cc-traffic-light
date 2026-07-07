@@ -26,7 +26,7 @@ pub fn is_enabled() -> Result<bool> {
     };
     let _guard = RegistryKey(key);
 
-    let value_name = wide_null(RUN_VALUE_NAME);
+    let value_name = win32::wide_null(RUN_VALUE_NAME);
     let mut value_type = REG_SZ;
     let mut size = 0u32;
     let status = unsafe {
@@ -53,11 +53,11 @@ pub fn set_enabled(enabled: bool) -> Result<()> {
         let key = create_run_key()?;
         let _guard = RegistryKey(key);
         let command = quoted_command_line();
-        let bytes = wide_null(&command);
+        let bytes = win32::wide_null(&command);
         unsafe {
             RegSetValueExW(
                 key,
-                PCWSTR(wide_null(RUN_VALUE_NAME).as_ptr()),
+                PCWSTR(win32::wide_null(RUN_VALUE_NAME).as_ptr()),
                 0,
                 REG_SZ,
                 Some(std::slice::from_raw_parts(
@@ -72,7 +72,7 @@ pub fn set_enabled(enabled: bool) -> Result<()> {
             return Ok(());
         };
         let _guard = RegistryKey(key);
-        let value_name = wide_null(RUN_VALUE_NAME);
+        let value_name = win32::wide_null(RUN_VALUE_NAME);
         unsafe { RegDeleteValueW(key, PCWSTR(value_name.as_ptr())).ok() }
     }
 }
@@ -105,12 +105,6 @@ fn open_run_key(access: REG_SAM_FLAGS) -> Option<HKEY> {
     let mut key = HKEY::default();
     let status = unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY_PATH, 0, access, &mut key) };
     if status.is_ok() { Some(key) } else { None }
-}
-
-fn wide_null(value: &str) -> Vec<u16> {
-    let mut wide = win32::wide_text(value);
-    wide.push(0);
-    wide
 }
 
 struct RegistryKey(HKEY);

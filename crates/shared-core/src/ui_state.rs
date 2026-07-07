@@ -1,14 +1,25 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::settings_service::StatusSnapshotView;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SourceId {
     Codex,
     Claude,
 }
 
 impl SourceId {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "codex" => Some(Self::Codex),
+            "claude" | "claude_code" | "claudecode" => Some(Self::Claude),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Codex => "codex",
@@ -121,14 +132,7 @@ impl AppStatusSnapshot {
         for source_id in [SourceId::Codex, SourceId::Claude] {
             sources.insert(
                 source_id.as_str().to_string(),
-                SourceStatus {
-                    source_id,
-                    state: SourceVisualState::Idle,
-                    confidence: SourceConfidence::Degraded,
-                    method: DetectionMethod::Unknown,
-                    updated_at: 0,
-                    message: None,
-                },
+                SourceStatus::idle(source_id),
             );
         }
 

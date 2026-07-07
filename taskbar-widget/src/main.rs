@@ -34,7 +34,7 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DispatchMessageW,
-            GetClientRect, GetMessageW, HTCLIENT, HTTRANSPARENT, IDC_ARROW, KillTimer,
+            GetClientRect, GetMessageW, HCURSOR, HTCLIENT, HTTRANSPARENT, IDC_ARROW, KillTimer,
             LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SetCursor,
             SetTimer, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
             WM_COMMAND, WM_DESTROY, WM_LBUTTONUP, WM_NCDESTROY, WM_NCHITTEST, WM_PAINT,
@@ -74,6 +74,13 @@ static APP_STATUS_SNAPSHOT: OnceLock<Mutex<AppStatusSnapshot>> = OnceLock::new()
 static SETTINGS_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 static DEBUG_CONFIG: OnceLock<DebugLoopConfig> = OnceLock::new();
 static WIDGET_RUNTIME_STATE: OnceLock<Mutex<WidgetRuntimeState>> = OnceLock::new();
+/// HCURSOR wraps `*mut c_void`, which is neither Send nor Sync,
+/// but cursor handles are safe to share across threads (read-only after init).
+struct SafeCursor(HCURSOR);
+unsafe impl Send for SafeCursor {}
+unsafe impl Sync for SafeCursor {}
+
+static ARROW_CURSOR: OnceLock<SafeCursor> = OnceLock::new();
 
 fn main() -> Result<()> {
     win32::init_runtime_log();
@@ -327,8 +334,11 @@ unsafe extern "system" fn window_proc(
             unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
         }
         WM_SETCURSOR => {
+            let cursor = ARROW_CURSOR.get_or_init(|| {
+                SafeCursor(unsafe { LoadCursorW(None, IDC_ARROW).unwrap_or_default() })
+            });
             unsafe {
-                let _ = SetCursor(LoadCursorW(None, IDC_ARROW).unwrap_or_default());
+                let _ = SetCursor(cursor.0);
             }
             LRESULT(1)
         }
@@ -648,6 +658,7 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                     if let Some(settings_hwnd) = current_settings_hwnd() {
                         settings_window::hide_window(settings_hwnd);
                     }
+                    sync_settings_hosts();
                     return;
                 }
                 Ok(false) => {}

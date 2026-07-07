@@ -8,7 +8,7 @@ use std::{
 };
 
 use windows::Win32::{
-    Foundation::{HWND, RECT, SetLastError, WIN32_ERROR},
+    Foundation::{COLORREF, HWND, RECT, SetLastError, WIN32_ERROR},
     UI::{
         HiDpi::{
             DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
@@ -89,6 +89,12 @@ pub fn wide_text(value: &str) -> Vec<u16> {
     value.encode_utf16().collect()
 }
 
+pub fn wide_null(value: &str) -> Vec<u16> {
+    let mut wide = wide_text(value);
+    wide.push(0);
+    wide
+}
+
 pub fn format_hwnd(hwnd: HWND) -> String {
     format!("0x{:X}", hwnd.0 as usize)
 }
@@ -149,6 +155,10 @@ pub fn rect_for_window(hwnd: HWND) -> Option<RECT> {
 
 pub fn format_rect(rect: &RECT) -> String {
     format!("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom)
+}
+
+pub fn rgb(red: u8, green: u8, blue: u8) -> COLORREF {
+    COLORREF(u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16))
 }
 
 pub fn log_window(label: &str, hwnd: HWND) {

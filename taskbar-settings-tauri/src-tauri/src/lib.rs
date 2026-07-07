@@ -6,9 +6,8 @@ use std::{
     },
 };
 
-use serde::Serialize;
 use shared_core::{
-    app_config::{config_file_path, default_widget_palette, AppConfig},
+    app_config::{changed_keys, config_file_path, default_widget_palette, AppConfig},
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
         SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand,
@@ -28,11 +27,6 @@ struct FakeBackendState {
 static FAKE_STATE: OnceLock<Mutex<FakeBackendState>> = OnceLock::new();
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 const FAKE_BACKEND_ENV: &str = "CC_TRAFFIC_LIGHT_TAURI_FAKE_BACKEND";
-
-#[derive(Serialize)]
-struct TauriCommandError {
-    message: String,
-}
 
 fn state() -> &'static Mutex<FakeBackendState> {
     FAKE_STATE.get_or_init(|| {
@@ -77,12 +71,6 @@ fn fake_snapshot() -> StatusSnapshotView {
     }
 }
 
-fn error(message: impl Into<String>) -> TauriCommandError {
-    TauriCommandError {
-        message: message.into(),
-    }
-}
-
 fn about_metadata() -> SettingsAboutMetadataDto {
     SettingsAboutMetadataDto {
         product_name: "CC Traffic Light".to_string(),
@@ -108,7 +96,7 @@ fn wide_null(value: &str) -> Vec<u16> {
     wide
 }
 
-fn call_pipe(command: SettingsIpcCommand) -> Result<SettingsIpcResponse, TauriCommandError> {
+fn call_pipe(command: SettingsIpcCommand) -> Result<SettingsIpcResponse, String> {
     let envelope = SettingsIpcEnvelope {
         protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
         request_id: next_request_id(),
@@ -116,7 +104,7 @@ fn call_pipe(command: SettingsIpcCommand) -> Result<SettingsIpcResponse, TauriCo
     };
     let request_id = envelope.request_id.clone();
     let payload = serde_json::to_vec(&envelope)
-        .map_err(|serialize_error| error(serialize_error.to_string()))?;
+        .map_err(|e| e.to_string())?;
     let pipe_name = wide_null(TAURI_SETTINGS_PIPE_NAME);
     let _ = unsafe { WaitNamedPipeW(PCWSTR(pipe_name.as_ptr()), 150) };
 
@@ -134,33 +122,41 @@ fn call_pipe(command: SettingsIpcCommand) -> Result<SettingsIpcResponse, TauriCo
         )
     }
     .ok()
-    .map_err(|_| error("named pipe request failed"))?;
+    .map_err(|_| "named pipe request failed".to_string())?;
 
     let response = serde_json::from_slice::<SettingsIpcResponseEnvelope>(&output[..read as usize])
-        .map_err(|parse_error| error(parse_error.to_string()))?;
+        .map_err(|e| e.to_string())?;
 
     if response.protocol_version != TAURI_SETTINGS_PROTOCOL_VERSION {
-        return Err(error("named pipe protocol mismatch"));
+        return Err("named pipe protocol mismatch".to_string());
     }
     if response.request_id != request_id {
-        return Err(error("named pipe request id mismatch"));
+        return Err("named pipe request id mismatch".to_string());
     }
     Ok(response.response)
 }
 
-fn pipe_or_fake_error(pipe_error: TauriCommandError) -> TauriCommandError {
-    if fake_backend_enabled() {
-        return pipe_error;
+/// Try the host pipe; on failure (and fake mode enabled) fall back to fake state.
+fn call_or_fake<T>(
+    command: SettingsIpcCommand,
+    extract: impl FnOnce(SettingsIpcResponse) -> Result<T, String>,
+    fake_fallback: impl FnOnce(&mut FakeBackendState) -> Result<T, String>,
+) -> Result<T, String> {
+    match call_pipe(command) {
+        Ok(response) => extract(response),
+        Err(pipe_error) if !fake_backend_enabled() => Err(format!(
+            "{}; fake backend disabled unless {}=1",
+            pipe_error, FAKE_BACKEND_ENV
+        )),
+        Err(_) => {
+            let mut guard = state().lock().map_err(|_| "fake state lock poisoned".to_string())?;
+            fake_fallback(&mut guard)
+        }
     }
-
-    error(format!(
-        "{}; fake backend disabled unless {}=1",
-        pipe_error.message, FAKE_BACKEND_ENV
-    ))
 }
 
 #[tauri::command]
-fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
+fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
     if let (Ok(SettingsIpcResponse::GetSnapshot { snapshot }), Ok(SettingsIpcResponse::GetSettings { settings })) =
         (call_pipe(SettingsIpcCommand::GetSnapshot), call_pipe(SettingsIpcCommand::GetSettings))
     {
@@ -187,13 +183,13 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
     }
 
     if !fake_backend_enabled() {
-        return Err(error(format!(
+        return Err(format!(
             "host settings pipe unavailable; fake backend disabled unless {}=1",
             FAKE_BACKEND_ENV
-        )));
+        ));
     }
 
-    let guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
+    let guard = state().lock().map_err(|_| "fake state lock poisoned".to_string())?;
     Ok(SettingsBootstrapDto {
         protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
         transport: SettingsTransportDto {
@@ -217,105 +213,84 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, TauriCommandError> {
 }
 
 #[tauri::command]
-fn get_snapshot() -> Result<StatusSnapshotView, TauriCommandError> {
-    match call_pipe(SettingsIpcCommand::GetSnapshot) {
-        Ok(SettingsIpcResponse::GetSnapshot { snapshot }) => return Ok(snapshot),
-        Ok(SettingsIpcResponse::Error { message }) => return Err(error(message)),
-        Ok(_) => return Err(error("unexpected get_snapshot response")),
-        Err(pipe_error) if !fake_backend_enabled() => return Err(pipe_or_fake_error(pipe_error)),
-        Err(_) => {}
-    }
-
-    let guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
-    Ok(guard.snapshot.clone())
+fn get_snapshot() -> Result<StatusSnapshotView, String> {
+    call_or_fake(
+        SettingsIpcCommand::GetSnapshot,
+        |response| match response {
+            SettingsIpcResponse::GetSnapshot { snapshot } => Ok(snapshot),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected get_snapshot response".to_string()),
+        },
+        |guard| Ok(guard.snapshot.clone()),
+    )
 }
 
 #[tauri::command]
-fn get_settings() -> Result<AppConfig, TauriCommandError> {
-    match call_pipe(SettingsIpcCommand::GetSettings) {
-        Ok(SettingsIpcResponse::GetSettings { settings }) => return Ok(settings),
-        Ok(SettingsIpcResponse::Error { message }) => return Err(error(message)),
-        Ok(_) => return Err(error("unexpected get_settings response")),
-        Err(pipe_error) if !fake_backend_enabled() => return Err(pipe_or_fake_error(pipe_error)),
-        Err(_) => {}
-    }
-
-    let guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
-    Ok(guard.settings.clone())
+fn get_settings() -> Result<AppConfig, String> {
+    call_or_fake(
+        SettingsIpcCommand::GetSettings,
+        |response| match response {
+            SettingsIpcResponse::GetSettings { settings } => Ok(settings),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected get_settings response".to_string()),
+        },
+        |guard| Ok(guard.settings.clone()),
+    )
 }
 
 #[tauri::command]
-fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, TauriCommandError> {
-    match call_pipe(SettingsIpcCommand::SaveSettings {
-        settings: settings.clone(),
-    }) {
-        Ok(SettingsIpcResponse::SaveSettings { result }) => return Ok(result),
-        Ok(SettingsIpcResponse::Error { message }) => return Err(error(message)),
-        Ok(_) => return Err(error("unexpected save_settings response")),
-        Err(pipe_error) if !fake_backend_enabled() => return Err(pipe_or_fake_error(pipe_error)),
-        Err(_) => {}
-    }
-
-    let mut guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
-    let applied_keys = vec![
-        "general.autostart_enabled".to_string(),
-        "general.start_minimized_to_tray".to_string(),
-        "general.close_to_tray".to_string(),
-        "monitoring.codex_enabled".to_string(),
-        "monitoring.claude_enabled".to_string(),
-        "appearance.ui_theme".to_string(),
-        "appearance.indicator_style".to_string(),
-        "appearance.widget_size".to_string(),
-        "appearance.show_labels".to_string(),
-        "appearance.reduced_motion".to_string(),
-        "widget_visual.placement".to_string(),
-        "widget_visual.palette.green".to_string(),
-        "widget_visual.palette.yellow".to_string(),
-        "widget_visual.palette.red".to_string(),
-        "widget_visual.palette.inactive_brightness_percent".to_string(),
-        "localization.language".to_string(),
-        "diagnostics.last_opened_page".to_string()
-    ];
-    guard.settings = settings.clone();
-    Ok(SettingsSaveResultDto {
-        settings,
-        applied_keys,
-    })
+fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, String> {
+    call_or_fake(
+        SettingsIpcCommand::SaveSettings {
+            settings: settings.clone(),
+        },
+        |response| match response {
+            SettingsIpcResponse::SaveSettings { result } => Ok(result),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected save_settings response".to_string()),
+        },
+        |guard| {
+            let previous = std::mem::replace(&mut guard.settings, settings);
+            let applied_keys = changed_keys(&previous, &guard.settings);
+            Ok(SettingsSaveResultDto {
+                settings: guard.settings.clone(),
+                applied_keys,
+            })
+        },
+    )
 }
 
 #[tauri::command]
-fn request_refresh() -> Result<SettingsRefreshResultDto, TauriCommandError> {
-    match call_pipe(SettingsIpcCommand::RequestRefresh) {
-        Ok(SettingsIpcResponse::RequestRefresh { result }) => return Ok(result),
-        Ok(SettingsIpcResponse::Error { message }) => return Err(error(message)),
-        Ok(_) => return Err(error("unexpected request_refresh response")),
-        Err(pipe_error) if !fake_backend_enabled() => return Err(pipe_or_fake_error(pipe_error)),
-        Err(_) => {}
-    }
-
-    let mut guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
-    guard.snapshot.last_detection_refresh_at = Some(1_783_066_111_000);
-    Ok(SettingsRefreshResultDto { accepted: true })
+fn request_refresh() -> Result<SettingsRefreshResultDto, String> {
+    call_or_fake(
+        SettingsIpcCommand::RequestRefresh,
+        |response| match response {
+            SettingsIpcResponse::RequestRefresh { result } => Ok(result),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected request_refresh response".to_string()),
+        },
+        |guard| {
+            guard.snapshot.last_detection_refresh_at = Some(1_783_066_111_000);
+            Ok(SettingsRefreshResultDto { accepted: true })
+        },
+    )
 }
 
 #[tauri::command]
 fn notify_settings_applied(
     applied_keys: Vec<String>,
-) -> Result<(), TauriCommandError> {
-    match call_pipe(SettingsIpcCommand::NotifySettingsApplied {
-        applied_keys: applied_keys.clone(),
-    }) {
-        Ok(SettingsIpcResponse::NotifySettingsApplied { acknowledged }) if acknowledged => {
-            return Ok(());
-        }
-        Ok(SettingsIpcResponse::Error { message }) => return Err(error(message)),
-        Ok(_) => return Err(error("unexpected notify_settings_applied response")),
-        Err(pipe_error) if !fake_backend_enabled() => return Err(pipe_or_fake_error(pipe_error)),
-        Err(_) => {}
-    }
-
-    let _guard = state().lock().map_err(|_| error("fake state lock poisoned"))?;
-    Ok(())
+) -> Result<(), String> {
+    call_or_fake(
+        SettingsIpcCommand::NotifySettingsApplied {
+            applied_keys: applied_keys.clone(),
+        },
+        |response| match response {
+            SettingsIpcResponse::NotifySettingsApplied { acknowledged } if acknowledged => Ok(()),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected notify_settings_applied response".to_string()),
+        },
+        |_guard| Ok(()),
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

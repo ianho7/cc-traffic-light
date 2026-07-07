@@ -6,6 +6,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use crate::ui_state::SourceId;
+
 use serde::{Deserialize, Serialize};
 use windows::{
     Win32::{
@@ -24,30 +26,6 @@ const ERROR_RETENTION_MS: u64 = 30 * 60 * 1_000;
 const WORKING_STALE_MS: u64 = 10 * 60 * 1_000;
 const WAITING_STALE_MS: u64 = 24 * 60 * 60 * 1_000;
 const MAX_MESSAGE_CHARS: usize = 160;
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AgentId {
-    Codex,
-    Claude,
-}
-
-impl AgentId {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value.to_ascii_lowercase().as_str() {
-            "codex" => Some(Self::Codex),
-            "claude" | "claude_code" | "claudecode" => Some(Self::Claude),
-            _ => None,
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Codex => "codex",
-            Self::Claude => "claude",
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -84,7 +62,7 @@ impl AgentState {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TaskStatus {
-    pub agent: AgentId,
+    pub agent: SourceId,
     pub task_key: String,
     pub session_id: String,
     pub session_id_source: String,
@@ -109,11 +87,6 @@ pub struct HookSummary {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AgentMonitor {
-    pub summary: HookSummary,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HookDiagnostics {
     pub last_ignored_event: Option<String>,
     pub last_corrupt_recovery_at: Option<u64>,
@@ -126,13 +99,13 @@ pub struct HookMonitorState {
     pub updated_at: u64,
     pub tasks: BTreeMap<String, TaskStatus>,
     pub global_summary: HookSummary,
-    pub agents: BTreeMap<String, AgentMonitor>,
+    pub agents: BTreeMap<String, HookSummary>,
     pub diagnostics: HookDiagnostics,
 }
 
 #[derive(Clone, Debug)]
 pub struct HookEventUpdate {
-    pub agent: AgentId,
+    pub agent: SourceId,
     pub session_id: Option<String>,
     pub session_id_source: String,
     pub hook_name: String,
@@ -181,15 +154,11 @@ impl HookMonitorState {
         let mut agents = BTreeMap::new();
         agents.insert(
             "claude".to_string(),
-            AgentMonitor {
-                summary: idle.clone(),
-            },
+            idle.clone(),
         );
         agents.insert(
             "codex".to_string(),
-            AgentMonitor {
-                summary: idle.clone(),
-            },
+            idle.clone(),
         );
 
         Self {
@@ -418,12 +387,10 @@ fn refresh_summaries(state: &mut HookMonitorState, now: u64) {
     }
 
     state.global_summary = summarize_tasks(state.tasks.values(), now, None);
-    for agent in [AgentId::Codex, AgentId::Claude] {
+    for agent in [SourceId::Codex, SourceId::Claude] {
         state.agents.insert(
             agent.as_str().to_string(),
-            AgentMonitor {
-                summary: summarize_tasks(state.tasks.values(), now, Some(agent)),
-            },
+            summarize_tasks(state.tasks.values(), now, Some(agent)),
         );
     }
 }
@@ -431,7 +398,7 @@ fn refresh_summaries(state: &mut HookMonitorState, now: u64) {
 fn summarize_tasks<'a>(
     tasks: impl Iterator<Item = &'a TaskStatus>,
     now: u64,
-    agent_filter: Option<AgentId>,
+    agent_filter: Option<SourceId>,
 ) -> HookSummary {
     let mut summary = HookSummary {
         state: AgentState::Idle,
@@ -483,11 +450,11 @@ fn state_priority(state: &AgentState) -> u8 {
     }
 }
 
-fn parse_task_key(task_key: &str) -> (AgentId, String, bool) {
+fn parse_task_key(task_key: &str) -> (SourceId, String, bool) {
     let agent = if task_key.to_ascii_lowercase().starts_with("claude_") {
-        AgentId::Claude
+        SourceId::Claude
     } else {
-        AgentId::Codex
+        SourceId::Codex
     };
     let session_id = task_key
         .split_once('_')

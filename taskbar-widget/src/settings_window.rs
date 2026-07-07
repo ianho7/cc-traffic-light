@@ -223,16 +223,7 @@ fn paint_window(hwnd: HWND) -> LRESULT {
                 let _ = FillRect(hdc, &layout.diagnostics_card, card);
                 paint_diagnostics(hdc, &snapshot, &layout);
             }
-            other_page => {
-                let card_rect = RECT {
-                    left: layout.content_rect.left + 20,
-                    top: layout.content_rect.top + 20,
-                    right: layout.content_rect.right - 20,
-                    bottom: layout.content_rect.bottom - 20,
-                };
-                let _ = FillRect(hdc, &card_rect, card);
-                paint_placeholder(hdc, &layout, other_page);
-            }
+            SettingsPage::Monitoring | SettingsPage::Appearance | SettingsPage::About => {}
         }
 
         let _ = DeleteObject(card);
@@ -507,35 +498,6 @@ fn draw_checkbox(
     }
 }
 
-fn paint_placeholder(
-    hdc: windows::Win32::Graphics::Gdi::HDC,
-    layout: &LayoutRects,
-    page: SettingsPage,
-) {
-    draw_text_line(
-        hdc,
-        &format!("{:?}", page).to_uppercase(),
-        RECT {
-            left: layout.content_rect.left + 36,
-            top: layout.content_rect.top + 36,
-            right: layout.content_rect.right - 36,
-            bottom: layout.content_rect.top + 56,
-        },
-        rgb(244, 244, 244),
-    );
-    draw_text_line(
-        hdc,
-        "Shell page is in place. Detailed controls will be filled in later phases.",
-        RECT {
-            left: layout.content_rect.left + 36,
-            top: layout.content_rect.top + 72,
-            right: layout.content_rect.right - 36,
-            bottom: layout.content_rect.top + 92,
-        },
-        rgb(146, 146, 152),
-    );
-}
-
 fn paint_diagnostics(
     hdc: windows::Win32::Graphics::Gdi::HDC,
     snapshot: &AppStatusSnapshot,
@@ -771,7 +733,7 @@ fn handle_left_click(hwnd: HWND, lparam: LPARAM) {
     if current_config().diagnostics.last_opened_page == SettingsPage::Diagnostics
         && rect_contains(layout.diagnostics_refresh_button, point)
     {
-        request_manual_refresh(hwnd);
+        request_manual_refresh();
     }
 }
 
@@ -829,8 +791,7 @@ pub fn request_manual_refresh_command() -> std::result::Result<AppConfig, String
     settings_bridge::request_manual_refresh_command()
 }
 
-fn request_manual_refresh(hwnd: HWND) {
-    let _ = hwnd;
+fn request_manual_refresh() {
     let _ = request_manual_refresh_command();
 }
 
@@ -979,7 +940,7 @@ fn format_timestamp(value: Option<u64>) -> String {
 }
 
 fn rgb(red: u8, green: u8, blue: u8) -> COLORREF {
-    COLORREF(u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16))
+    win32::rgb(red, green, blue)
 }
 
 fn window_style() -> windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE {

@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
@@ -281,7 +282,7 @@ pub fn load_config_diagnostic() -> ConfigLoadResult {
     };
 
     let original_schema_version = parsed_config.schema_version;
-    let config = normalize_config(parsed_config);
+    let config = normalize_config(&parsed_config);
     if config.schema_version != original_schema_version {
         let _ = write_config(&path, &config);
     }
@@ -295,7 +296,7 @@ pub fn load_config_diagnostic() -> ConfigLoadResult {
 
 pub fn save_config(config: &AppConfig) -> io::Result<()> {
     let path = config_file_path();
-    write_config(&path, &normalize_config(config.clone()))
+    write_config(&path, &normalize_config(config))
 }
 
 fn write_config(path: &Path, config: &AppConfig) -> io::Result<()> {
@@ -336,7 +337,57 @@ fn default_widget_inactive_brightness_percent() -> u8 {
     42
 }
 
-fn normalize_config(mut config: AppConfig) -> AppConfig {
+/// Compare two `AppConfig` values and return the list of changed field paths.
+///
+/// Uses JSON Value comparison so that adding new fields to `AppConfig`
+/// does not require updating this function.
+pub fn changed_keys(previous: &AppConfig, next: &AppConfig) -> Vec<String> {
+    let prev = serde_json::to_value(previous).unwrap();
+    let next_val = serde_json::to_value(next).unwrap();
+    let mut keys = Vec::new();
+    collect_differing_leaves(&prev, &next_val, String::new(), &mut keys);
+    keys
+}
+
+fn collect_differing_leaves(
+    prev: &serde_json::Value,
+    next_val: &serde_json::Value,
+    prefix: String,
+    keys: &mut Vec<String>,
+) {
+    match (prev, next_val) {
+        (serde_json::Value::Object(prev_map), serde_json::Value::Object(next_map)) => {
+            let mut all_keys: BTreeSet<&str> = BTreeSet::new();
+            for key in prev_map.keys() {
+                all_keys.insert(key.as_str());
+            }
+            for key in next_map.keys() {
+                all_keys.insert(key.as_str());
+            }
+            for key in all_keys {
+                let child_prefix = if prefix.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                match (prev_map.get(key), next_map.get(key)) {
+                    (Some(p), Some(n)) => {
+                        collect_differing_leaves(p, n, child_prefix, keys);
+                    }
+                    _ => keys.push(child_prefix),
+                }
+            }
+        }
+        _ => {
+            if prev != next_val {
+                keys.push(prefix);
+            }
+        }
+    }
+}
+
+fn normalize_config(config: &AppConfig) -> AppConfig {
+    let mut config = config.clone();
     config.schema_version = CONFIG_SCHEMA_VERSION;
     config.widget_visual.palette.inactive_brightness_percent = config
         .widget_visual

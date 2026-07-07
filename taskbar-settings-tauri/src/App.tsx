@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { Component, startTransition, useEffect, useRef, useState } from "react";
 import {
   bootstrapWindow,
   getSettings,
@@ -261,10 +261,6 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         needs_attention: "需要关注",
         completed: "已完成",
         error: "错误",
-        attention: "已完成",
-        blocking: "需要关注",
-        undiscovered: "空闲",
-        untrusted: "空闲",
         retrying: "重试中",
         attached: "已挂载",
         tray_only: "仅托盘",
@@ -275,11 +271,7 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         working: "正在处理当前任务",
         needs_attention: "等待你的确认或输入",
         completed: "最近一次任务刚完成",
-        error: "执行失败，需要重试或检查环境",
-        attention: "最近一次任务刚完成",
-        blocking: "等待你的确认或输入",
-        undiscovered: "当前没有活跃任务",
-        untrusted: "当前没有活跃任务"
+        error: "执行失败，需要重试或检查环境"
       },
       languageLabels: {
         follow_system: "跟随系统",
@@ -430,10 +422,6 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         needs_attention: "Needs Attention",
         completed: "Completed",
         error: "Error",
-        attention: "Completed",
-        blocking: "Needs Attention",
-        undiscovered: "Idle",
-        untrusted: "Idle",
         retrying: "Retrying",
         attached: "Attached",
         tray_only: "Tray only",
@@ -444,11 +432,7 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
         working: "Processing the current task",
         needs_attention: "Waiting for your confirmation or input",
         completed: "The most recent task just finished",
-        error: "Execution failed and needs retry or environment checks",
-        attention: "The most recent task just finished",
-        blocking: "Waiting for your confirmation or input",
-        undiscovered: "No active task right now",
-        untrusted: "No active task right now"
+        error: "Execution failed and needs retry or environment checks"
       },
       languageLabels: {
         follow_system: "Follow system",
@@ -458,6 +442,32 @@ const LOCALES: Record<AppLocale, LocaleStrings> = {
     }
   }
 };
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="app-loading" role="alert">
+          <div className="loading-panel">
+            <h1 className="loading-title">Something went wrong</h1>
+            <p className="loading-copy">{this.state.error?.message}</p>
+            <p className="loading-detail">Please close and reopen settings.</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   const [bootstrap, setBootstrap] = useState<SettingsBootstrapDto | null>(null);
@@ -527,7 +537,7 @@ function App() {
 
     const intervalId = window.setInterval(() => {
       void refreshReadModel();
-    }, 1_000);
+    }, 5_000);
 
     return () => {
       disposed = true;
@@ -1320,4 +1330,10 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-export default App;
+export default function SettingsApp() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}

@@ -7,6 +7,7 @@
     "settings:dev": "pnpm -C taskbar-settings-tauri dev",
     "settings:build": "pnpm -C taskbar-settings-tauri build",
     "settings:tauri:dev": "pnpm -C taskbar-settings-tauri tauri dev",
-    "settings:tauri:build": "pnpm -C taskbar-settings-tauri tauri build"
+    "settings:tauri:build": "pnpm -C taskbar-settings-tauri tauri build",
+    "pack": "powershell -ExecutionPolicy Bypass -File ./scripts/pack-all.ps1"
   }
 }

@@ -5,8 +5,9 @@ use std::{
 };
 
 use serde_json::{Map, Value};
-use taskbar_widget::agent_state::{self, AgentId, AgentState, HookEventUpdate};
+use taskbar_widget::agent_state::{self, AgentState, HookEventUpdate};
 use taskbar_widget::hook_rules;
+use taskbar_widget::ui_state::SourceId;
 
 fn main() -> ExitCode {
     match run() {
@@ -87,7 +88,7 @@ fn handle_hook(args: &[String]) -> Result<String, String> {
         return Err(usage());
     }
 
-    let agent = AgentId::parse(&args[0]).ok_or_else(|| "invalid agent".to_string())?;
+    let agent = SourceId::parse(&args[0]).ok_or_else(|| "invalid agent".to_string())?;
     let argv_hook_name = args[1].clone();
     let input = read_stdin().map_err(|error| error.to_string())?;
     let received_at = agent_state::now_ms();
@@ -101,14 +102,8 @@ fn handle_hook(args: &[String]) -> Result<String, String> {
         "payload"
     }
     .to_string();
-    let previous = agent_state::load_state_for_display()
-        .tasks
-        .get(&agent_state::task_key(
-            agent.as_str(),
-            session_id.as_deref(),
-        ))
-        .map(|task| task.state.clone());
-    let state = hook_rules::infer_state(&hook_name, previous.as_ref(), &payload);
+
+    let state = hook_rules::infer_state(&hook_name);
     let update = HookEventUpdate {
         agent: agent.clone(),
         session_id: session_id.clone(),
@@ -125,7 +120,7 @@ fn handle_hook(args: &[String]) -> Result<String, String> {
     };
 
     agent_state::apply_hook_event(update).map_err(|error| error.to_string())?;
-    if agent == AgentId::Codex {
+    if agent == SourceId::Codex {
         Ok("{}".to_string())
     } else {
         Ok(String::new())

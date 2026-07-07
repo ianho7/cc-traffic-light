@@ -6,6 +6,7 @@
 
 [Setup]
 AppId={{B8F4A3D2-1C5E-4A7F-9B6D-8E2C3F1A5D7B}}
+SetupIconFile=taskbar-settings-tauri\src-tauri\icons\icon.ico
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
