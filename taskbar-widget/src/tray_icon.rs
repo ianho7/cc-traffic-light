@@ -1,4 +1,5 @@
 use crate::win32;
+use image::load_from_memory;
 use std::sync::OnceLock;
 use taskbar_widget::{app_config::AppConfig, i18n::Localizer, ui_state::AppStatusSnapshot};
 use windows::{
@@ -29,7 +30,6 @@ pub const TRAY_CMD_OPEN_SETTINGS: u16 = 1001;
 pub const TRAY_CMD_REFRESH: u16 = 1002;
 pub const TRAY_CMD_EXIT: u16 = 1003;
 const TRAY_ICON_SIZE: usize = 16;
-const TRAY_ICON_PADDING: i32 = 3;
 
 static TRAY_ICON_CACHE: OnceLock<TrayIconCache> = OnceLock::new();
 
@@ -186,31 +186,33 @@ fn tray_icon_handle_for_overall(overall: &str) -> windows::Win32::UI::WindowsAnd
 }
 
 fn build_tray_icon_cache() -> TrayIconCache {
+    let icon = load_tray_icon_from_png().0 as isize;
     TrayIconCache {
-        idle: create_status_icon(rgb(82, 214, 113)).0 as isize,
-        working: create_status_icon(rgb(82, 214, 113)).0 as isize,
-        completed: create_status_icon(rgb(255, 210, 76)).0 as isize,
-        needs_attention: create_status_icon(rgb(255, 210, 76)).0 as isize,
-        error: create_status_icon(rgb(255, 108, 96)).0 as isize,
+        idle: icon,
+        working: icon,
+        completed: icon,
+        needs_attention: icon,
+        error: icon,
     }
 }
 
-fn create_status_icon(color: u32) -> windows::Win32::UI::WindowsAndMessaging::HICON {
-    let mut pixels = vec![0u32; TRAY_ICON_SIZE * TRAY_ICON_SIZE];
-    let center = (TRAY_ICON_SIZE as i32) / 2;
-    let radius = center - TRAY_ICON_PADDING;
-    let radius_squared = radius * radius;
-
-    for y in 0..TRAY_ICON_SIZE as i32 {
-        for x in 0..TRAY_ICON_SIZE as i32 {
-            let dx = x - center;
-            let dy = y - center;
-            if (dx * dx) + (dy * dy) <= radius_squared {
-                let index = (y as usize * TRAY_ICON_SIZE) + x as usize;
-                pixels[index] = 0xFF00_0000 | color;
-            }
-        }
-    }
+/// Load the tray icon from the embedded PNG, resize to 16×16, and create an HICON.
+fn load_tray_icon_from_png() -> windows::Win32::UI::WindowsAndMessaging::HICON {
+    let bytes = include_bytes!("../resources/icon.png");
+    let img = load_from_memory(bytes).expect("Failed to decode tray icon PNG");
+    let resized = img.resize_exact(
+        TRAY_ICON_SIZE as u32,
+        TRAY_ICON_SIZE as u32,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let rgba = resized.to_rgba8();
+    let pixels: Vec<u32> = rgba
+        .enumerate_pixels()
+        .map(|(_, _, pixel)| {
+            // image crate gives [R, G, B, A]; DIB expects [B, G, R, A] in memory
+            u32::from_le_bytes([pixel[2], pixel[1], pixel[0], pixel[3]])
+        })
+        .collect();
 
     unsafe {
         let color_bitmap = create_argb_bitmap(&pixels);
@@ -259,10 +261,6 @@ unsafe fn create_mask_bitmap() -> HBITMAP {
     unsafe { create_argb_bitmap(&pixels) }
 }
 
-fn rgb(red: u8, green: u8, blue: u8) -> u32 {
-    u32::from(blue) | (u32::from(green) << 8) | (u32::from(red) << 16)
-}
-
 struct TrayIconCache {
     idle: isize,
     working: isize,
@@ -296,13 +294,8 @@ impl TrayIconCache {
 impl Drop for TrayIconCache {
     fn drop(&mut self) {
         unsafe {
+            // All states share the same icon handle; destroy it once.
             let _ = DestroyIcon(self.idle());
-            if self.working != self.idle {
-                let _ = DestroyIcon(self.working());
-            }
-            let _ = DestroyIcon(self.completed());
-            let _ = DestroyIcon(self.needs_attention());
-            let _ = DestroyIcon(self.error());
         }
     }
 }

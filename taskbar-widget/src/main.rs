@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod autostart;
 mod settings_bridge;
 mod settings_process;

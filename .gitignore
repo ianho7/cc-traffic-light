@@ -44,7 +44,10 @@ taskbar-settings-tauri/src-tauri/target/
 taskbar-settings-tauri/src-tauri/gen/
 target-codex-verify
 
-# Local review/debug artifacts
-slint-runtime.log
-slint-settings-review.png
-slint-settings-review-v2.png
+# Agent/tool metadata (not project source)
+.reasonix/
+reasonix.toml
+.agents/
+
+# Claude Code runtime lock
+.claude/scheduled_tasks.lock
