@@ -1,0 +1,53 @@
+/* ================================================================
+   Shared Components — V2 Minimal Dot Matrix
+   ================================================================ */
+
+/* ── Page Frame ── */
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+/* ── Page Header ── */
+.page-header {
+  border-bottom: 1px solid var(--line, #deded8);
+  padding-bottom: 22px;
+  margin-bottom: 28px;
+}
+
+.page-header h1 {
+  font-size: 64px;
+  letter-spacing: -0.08em;
+  margin: 8px 0;
+}
+
+/* ── Meta Label ── */
+.meta-label {
+  font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.16em;
+  color: #888;
+  text-transform: uppercase;
+}
+
+/* ── Sub Text ── */
+.sub-text {
+  color: var(--muted, #777);
+}
+
+/* ── Base Card ── */
+.base-card {
+  border: 1px solid var(--line, #deded8);
+  background: var(--paper, #fffefa);
+  /* border-radius: var(--radius-lg, 12px); */
+}
+
+/* ── Pill ── */
+.pill {
+  border: 1px solid var(--line, #deded8);
+  border-radius: var(--radius-pill, 999px);
+  padding: 8px 12px;
+  font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
+}

@@ -1,0 +1,33 @@
+/* ================================================================
+   Reset
+   ================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink, #151515);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 6px);
+}

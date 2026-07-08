@@ -1,0 +1,25 @@
+/* ================================================================
+   App Shell — V2 Minimal Dot Matrix
+   ================================================================ */
+
+.app {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 240px) 1fr;
+  min-height: 100vh;
+}
+
+.main {
+  padding: var(--space-9, 36px);
+  max-width: 1250px;
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+  .main {
+    padding: var(--space-5, 20px);
+  }
+}

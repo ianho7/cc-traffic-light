@@ -1,0 +1,18 @@
+/* ================================================================
+   Page-specific Layouts — V2 Minimal Dot Matrix
+   ================================================================ */
+
+/* ── Overview ── */
+.overview-body {
+  display: grid;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .signal-desk {
+    grid-template-columns: 1fr !important;
+  }
+  .agents {
+    grid-template-columns: 1fr !important;
+  }
+}

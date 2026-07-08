@@ -1,0 +1,50 @@
+/* ================================================================
+   Navigation — V2 Minimal Dot Matrix
+   ================================================================ */
+
+.side {
+  border-right: 1px solid var(--line, #deded8);
+  padding: var(--space-6, 24px);
+  background: var(--bg-sidebar, #fafaf7);
+}
+
+.brand {
+  font: 800 12px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.16em;
+  margin-bottom: var(--space-8, 32px);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+  font: 700 12px var(--mono, ui-monospace, Consolas, monospace);
+  cursor: pointer;
+  color: var(--muted, #777);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.nav-item--active {
+  background: var(--ink, #111);
+  color: white;
+}
+
+.nav-item--active:hover {
+  background: var(--ink, #111);
+  color: white;
+}
