@@ -9,6 +9,9 @@ target/
 taskbar-widget/target/
 taskbar-widget/diagnose-taskbar-loop/
 
+# Paraglide JS generated output
+taskbar-settings-tauri/src/paraglide/
+
 # Windows filesystem noise
 Thumbs.db
 ehthumbs.db
