@@ -1,5 +1,6 @@
 use std::{
     env,
+    os::windows::process::CommandExt,
     path::PathBuf,
     process::{Child, Command},
     sync::{Mutex, OnceLock},
@@ -7,6 +8,7 @@ use std::{
 
 use windows::Win32::{
     Foundation::{BOOL, HWND, LPARAM},
+    System::Threading::CREATE_NO_WINDOW,
     UI::WindowsAndMessaging::{
         EnumWindows, GetWindowThreadProcessId, SW_RESTORE, SetForegroundWindow, ShowWindow,
     },
@@ -93,7 +95,11 @@ pub fn open_or_focus_tauri_settings() -> Result<bool, String> {
     }
 
     let exe_path = resolve_tauri_settings_exe()?;
+    // The settings executable can be built as a console-subsystem application.
+    // It is launched from the GUI host, so suppress only the inherited console
+    // window while leaving the Tauri UI free to create its normal top-level HWND.
     let child = Command::new(&exe_path)
+        .creation_flags(CREATE_NO_WINDOW.0)
         .spawn()
         .map_err(|error| format!("failed to spawn {}: {error}", exe_path.display()))?;
     let pid = child.id();
