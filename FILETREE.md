@@ -1,129 +1,78 @@
 # FILETREE
 
-## (root)/
+This is a maintained map of source, entry points, validation scripts, and project documentation. Build output and dependency caches are intentionally omitted.
 
-- `AGENTS.md`: Contributor guide for workspace layout, build commands, validation expectations, and agent constraints.
-- `FILETREE.md`: Workspace structure manifest for the Win32 host, Tauri settings app, shared core, and migration docs.
-- `.gitignore`: Ignore rules for build output, package-manager caches, screenshots, and local diagnostics.
-- `Cargo.toml`: Root Cargo workspace manifest for `shared-core`, `taskbar-settings-tauri`, and `taskbar-widget`.
-- `Cargo.lock`: Locked Rust dependency graph for the whole workspace.
-- `package.json`: Root PNPM scripts for building and running the Tauri settings frontend and app shell.
-- `pnpm-workspace.yaml`: PNPM workspace definition that includes the Tauri settings frontend package.
-- `pnpm-lock.yaml`: Locked PNPM dependency graph for the frontend workspace.
+## Root
 
-## .claude/
+- `AGENTS.md`: Repository and agent working rules.
+- `README.md`: Product overview, architecture, state semantics, build order, and current release limitations.
+- `FILETREE.md`: This source and documentation map.
+- `Cargo.toml` / `Cargo.lock`: Rust workspace manifest and lockfile.
+- `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`: Root PNPM scripts, workspace definition, and lockfile.
+- `installer.iss`: Inno Setup installer definition.
+- `scripts/rebuild-all.ps1`: Frontend and Rust rebuild orchestration.
+- `scripts/pack-all.ps1`: Packaging orchestration.
+- `scripts/clear-local-history.ps1`: Local development cleanup helper.
+- `reasonix.toml`: Project automation metadata.
 
-- `settings.local.json`: Project-local Claude Code hook configuration that writes shared task state through `taskbar_widget_hook.exe`.
+## Project configuration
 
-## .claude/hook-logs/
+- `.codex/hooks.json`: Codex lifecycle hook configuration.
+- `.claude/hooks.json`: Claude Code hook configuration.
+- `.claude/settings.json`: Project-local Claude Code settings.
+- `.claude/hooks/`: Hook sampling helpers.
+- `.claude/hook-logs/`: Captured redacted hook payload samples when present.
 
-- `*.jsonl`: Real Claude hook samples captured for payload-shape verification and field-path evidence.
+## Rust workspace
 
-## .claude/hooks/
+### `crates/shared-core/`
 
-- `sample-hook.ps1`: Shape-only Claude hook sampler that records redacted payload structure for integration debugging.
+Shared Rust business and IPC layer. `src/` contains `app_config.rs`, `runtime_contract.rs`, `settings_service.rs`, `tauri_ipc.rs`, `ui_state.rs`, and `lib.rs`.
 
-## .codex/
+### `taskbar-widget/`
 
-- `hooks.json`: Project-local Codex lifecycle hook configuration that writes shared task state through `taskbar_widget_hook.exe`.
+Native Win32 host, tray icon, taskbar widget, detector loop, hook state persistence, fallback settings window, and host-side named-pipe server.
 
-## crates/
+- `src/main.rs`: Host startup, widget window lifecycle, Explorer recovery, painting, and message loop.
+- `src/detector.rs`: Codex/Claude detection and refresh loop.
+- `src/agent_state.rs`: Hook state schema, persistence, stale handling, and aggregation.
+- `src/hook_rules.rs`: Hook payload extraction and event-to-state mapping.
+- `src/settings_process.rs`: Tauri settings launch, reuse, close, recovery, and fallback selection.
+- `src/settings_bridge.rs`: Host settings facade.
+- `src/tauri_settings_ipc.rs`: Named-pipe IPC server.
+- `src/taskbar.rs`: Taskbar probing, attachment, positioning, and diagnostics.
+- `src/widget_effects.rs` / `src/widget_render.rs`: Animation/reduced-motion state and lamp rendering.
+- `src/tray_icon.rs`, `src/settings_window.rs`, `src/autostart.rs`, `src/i18n.rs`, `src/runtime_contract.rs`, `src/ui_state.rs`, `src/win32.rs`: Host support modules.
+- `src/bin/taskbar_widget_hook.rs`: Hook CLI for state writes, payload sampling, and debug commands.
+- `resources/`: Runtime logos and application icon.
+- `scripts/`: Hook installers/dumps, taskbar diagnostics, named-pipe/read-model checks, and Tauri lifecycle validators.
+- `examples.codex-hooks.toml` / `examples.claude-hooks.json`: Example hook configurations.
+- `README.md` / `FILETREE.md`: Host-specific documentation.
 
-- `shared-core/`: Shared Rust business layer for config models, snapshot DTOs, settings services, and Tauri IPC contract types.
+### `taskbar-settings-tauri/`
 
-## crates/shared-core/
+Standalone Tauri settings application.
 
-- `Cargo.toml`: Rust package manifest for the shared settings/config core crate.
+- `src/`: React UI, shared components, pages, DTOs, Tauri client, localization, and styles.
+- `src/pages/`: Overview, General, Appearance, Monitoring, and About pages.
+- `src/components/`: Layout, navigation, signal, source, status, toggle, primitive, and appearance components.
+- `src-tauri/`: Tauri Rust backend, IPC command bridge, capabilities, icons, and app configuration.
+- `messages/`: English and Chinese localization messages.
+- `scripts/`: Frontend build and settings coverage verification.
+- `project.inlang/`: Localization project configuration.
 
-## docs/
+## Documentation
 
-- `checklist/`: Execution checklists for widget, hook, traffic-light UI, and Tauri settings migration work.
-- `handoff/`: Session handoffs that capture current diagnosis, build constraints, and next-step recommendations.
-- `plan/`: Architecture, migration, and phased implementation plans for the host, hooks, UI, and Tauri integration.
-- `reflections/`: Per-task decision logs generated from checklist execution.
+- `docs/plan/`: Architecture and phased implementation plans, including end-to-end monitoring and UI componentization.
+- `docs/checklist/`: Active execution and release-readiness checklists.
+- `docs/handoff/`: Current handoffs, hook investigations, release gate report, and evidence manifest. The latest handoff is `2026-07-13-1608.md`.
+- `docs/reflections/`: Per-task decision and validation records, including the 2026-07-13 release records.
+- `docs/design/`: UI design and componentization specifications.
+- `docs/ui/`: UI demos and visual checklists.
+- `docs/references/`: Hook reference material and automation notes.
 
-## docs/checklist/
+## Generated or local-only output
 
-- `tauri-settings-migration.md`: Active execution checklist for the Win32 host plus Tauri settings migration.
-
-## docs/handoff/
-
-- `2026-07-04-1429.md`: Current migration handoff covering Slint retirement, Tauri-only settings entry, and the latest validation status.
-
-## docs/plan/
-
-- `README.md`: Reading guide for the plan set and how the major implementation phases relate to one another.
-- `tauri-settings-architecture-baseline.md`: Current architecture baseline for the Win32 host, Tauri settings process, shared core, and build constraints.
-- `tauri-settings-ipc-contract.md`: Named-pipe IPC contract for host and Tauri settings commands, envelopes, and DTO boundaries.
-- `tauri-settings-visual-fidelity-pass-1.md`: Visual comparison record for the first Tauri settings fidelity pass against the HTML demo baseline.
-
-## docs/reflections/
-
-- `task-TSM-*.md`: Tauri settings migration reflections for architecture, IPC, UI, lifecycle, validation, and documentation decisions.
-- `task-SSM-*.md`: Slint settings migration reflections retained as historical context for the Tauri follow-up work.
-- `task-*.md`: Earlier widget, hook, installer, and traffic-light UI reflections retained as project history.
-
-## target/
-
-- `debug/`: Root workspace Rust build output, including the runnable host and Tauri settings executables.
-
-## taskbar-settings-tauri/
-
-- `package.json`: PNPM package manifest for the React frontend and Tauri shell commands.
-- `index.html`: Vite HTML entry for the settings frontend.
-- `scripts/`: Frontend build and coverage-audit scripts for the Tauri settings surface.
-- `src/`: React settings UI, page structure, polling logic, and frontend DTO rendering.
-- `src-tauri/`: Tauri Rust backend that bridges frontend commands to the host named pipe.
-- `dist/`: Built frontend assets produced by `pnpm build`.
-
-## taskbar-settings-tauri/src-tauri/
-
-- `Cargo.toml`: Rust package manifest for the Tauri backend crate in the workspace.
-- `build.rs`: Tauri build-script entry for generated config and resources.
-- `tauri.conf.json`: Tauri app configuration for the standalone settings process.
-
-## taskbar-widget/
-
-- `Cargo.toml`: Rust package manifest for the Win32 host, tray integration, and fallback settings components.
-- `README.md`: Host-focused project overview, diagnostics guidance, and runtime notes.
-- `app.manifest`: Embedded Common Controls v6 manifest for the host executable.
-- `build.rs`: Host build script that embeds the application manifest during MSVC linking.
-- `examples.codex-hooks.toml`: Example Codex lifecycle hook configuration for feeding shared task state into the widget.
-- `examples.claude-hooks.json`: Example Claude Code hooks configuration for feeding shared task state into the widget.
-- `scripts/`: PowerShell diagnostics and lifecycle validation scripts for the host and settings process.
-- `src/`: Win32 host, tray, detector, fallback settings, shared-state, and IPC server code.
-
-## taskbar-widget/scripts/
-
-- `diagnose-taskbar-loop.ps1`: Focused Win11 taskbar visibility diagnosis loop for parent, anchor, coordinate, and render evidence.
-- `diagnose-widget-liveness.ps1`: Widget lifecycle and redraw diagnosis harness for runtime visibility and repaint regressions.
-- `validate-tauri-settings-lifecycle.ps1`: End-to-end lifecycle validator for spawning, reusing, closing, and recovering the Tauri settings process.
-- `validate-tauri-settings-read-model.ps1`: Live host named-pipe validator for snapshot reads, settings reads, refresh writes, and save/restore persistence.
-- `codex-lifecycle-hook-dump.ps1`: Codex lifecycle hook dump script for redacted shape-only payload sampling.
-- `codex-notify-probe-config.ps1`: Helper that prepares or inspects Codex notify probe configuration during low-fidelity notify experiments.
-- `codex-notify-probe-wrapper.ps1`: Wrapper that captures Codex notify probe inputs while forwarding the original notify command shape.
-- `install-codex-hooks.ps1`: User-scoped Codex hooks installer for merging managed lifecycle hook entries into `hooks.json`.
-
-## taskbar-widget/src/
-
-- `main.rs`: Starts the host, binds settings infrastructure, paints the widget, and runs the pure Win32 message loop.
-- `settings_process.rs`: Manages Tauri settings process launch, focus, reuse, Win32 fallback selection, and shutdown bookkeeping.
-- `settings_bridge.rs`: Host-side facade for reading snapshots, reading and saving config, applying changes, and issuing refresh requests.
-- `tauri_settings_ipc.rs`: Named-pipe server for Tauri settings commands and JSON request/response envelopes.
-- `settings_window.rs`: Win32 fallback settings window and helper commands retained for deep fallback scenarios.
-- `app_config.rs`: Host-facing config helpers and compatibility layer around the shared settings model.
-- `ui_state.rs`: Runtime snapshot model and source-status projection used by the widget and settings surfaces.
-- `detector.rs`: Polling logic for Codex and Claude state detection and runtime refresh behavior.
-- `tray_icon.rs`: Tray icon creation, menu wiring, and command dispatch helpers for the host process.
-- `taskbar.rs`: Taskbar probing, parent attachment, layered-window setup, placement, diagnostics, and runtime state logging.
-- `win32.rs`: Small Win32 helper layer for logging, DPI awareness, HWND formatting, RECT formatting, and error helpers.
-- `agent_state.rs`: Shared hook state schema, JSON persistence, stale handling, and summary aggregation for Codex and Claude.
-- `hook_rules.rs`: Hook payload field extraction and event-to-state mapping for working, waiting, done, and error transitions.
-- `runtime_contract.rs`: Shared runtime DTOs and compatibility helpers used between host layers and UI surfaces.
-- `i18n.rs`: Localization loader and label mapping for tray, fallback settings, and status text.
-- `autostart.rs`: Windows autostart registration helpers for settings-controlled launch behavior.
-- `lib.rs`: Library entry that exposes reusable host modules for the widget binary and hook CLI.
-
-## taskbar-widget/src/bin/
-
-- `taskbar_widget_hook.rs`: Hook CLI for payload sampling, shared-state writes, and debug `set` or `clear` commands.
+- `target/`: Root Rust build output, including debug/release executables.
+- `taskbar-settings-tauri/dist/`: Generated frontend assets.
+- `node_modules/`, `.pnpm-store/`, `design-previews/`, and local diagnostic artifacts: dependency caches or generated/local evidence; do not edit as source.

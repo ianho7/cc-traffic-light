@@ -14,7 +14,14 @@
 
 - 默认 settings 主入口已经切到 `Tauri`。
 - `Win32 settings_window` 仍作为当前 fallback 路径保留。
-- 旧 `Slint settings` 已归档到 `archive/slint-settings/`，不属于当前主链路。
+- 旧 Slint settings 已从当前主链路移除；相关迁移记录保留在 `docs/` 的历史文档中。
+
+当前发布状态：
+
+- 2026-07-13 发布门禁结论为 **APPROVED WITH ACCEPTED LIMITATIONS**。
+- Rust workspace 测试、前端构建、独立 release settings/host 构建、Settings 生命周期验证和 Explorer 重启恢复均已通过。
+- Claude 当前默认按 `ProcessOnly` 保守支持；已验证的项目级 PowerShell hook 不代表所有 shell/exec 形式都已支持。
+- 安装器、升级、卸载、隔离用户环境，以及部分最终桌面截图/录屏属于用户明确豁免的证据项，不应在文档中宣称已验收。
 
 ## 项目架构
 
@@ -78,6 +85,14 @@ cargo build -p taskbar-widget --offline
 - 不要用 `cargo build --workspace --offline` 作为宿主验收构建。
 - 宿主验收时保持 `taskbar-settings-tauri` 先、`taskbar-widget` 后。
 
+发布/生命周期验证：
+
+```powershell
+.\taskbar-widget\scripts\validate-tauri-settings-lifecycle.ps1 -Configuration debug -TimeoutSeconds 20
+```
+
+该脚本当前覆盖 spawn、reuse、close、reopen、forced-kill 和 host shutdown；release 验收时将 `-Configuration release` 并明确检查根目录 `target\release\` 产物。
+
 ## 状态说明
 
 当前产品层只保留 5 个主状态：`空闲 / 工作中 / 需要关注 / 已完成 / 错误`。  
@@ -97,13 +112,17 @@ cargo build -p taskbar-widget --offline
 - `Stop` / `SubagentStop` 表示本轮结束，固定映射为已完成；不根据最终自然语言消息中的“失败”等词推断错误。错误只由显式 `*Failure` hook 产生。
 - 当底层信号不足以证明 `需要关注 / 已完成 / 错误` 时，产品层优先保守回 `空闲`。
 - overall 主状态优先级为：`错误 > 需要关注 > 工作中 > 已完成 > 空闲`。
-- Claude Code command hooks 在当前 Windows 环境仍属于实验能力，不能仅凭配置文件存在判定为已就绪；未获得稳定 hook 事件时使用进程检测降级。
+- Claude Code hooks 在当前 Windows 环境按保守策略处理：已验证项目级 PowerShell shell-form 生命周期事件，但产品默认仍为 `ProcessOnly`，不能仅凭配置文件存在判定为 Active。
 
 ## 文档导航
 
+- [项目文件树与模块索引](FILETREE.md)
 - [Tauri Settings Architecture Baseline](docs/plan/tauri-settings-architecture-baseline.md)
 - [Tauri Settings IPC Contract](docs/plan/tauri-settings-ipc-contract.md)
 - [Taskbar Widget Visual Roadmap](docs/plan/taskbar-widget-visual-roadmap.md)
 - [Tauri Settings Migration Checklist](docs/checklist/tauri-settings-migration.md)
-- [Latest Handoff](docs/handoff/2026-07-04-1429.md)
+- [Latest Handoff](docs/handoff/2026-07-13-1608.md)
+- [Release Gate Report](docs/handoff/release-gate-report-2026-07-13.md)
+- [Release Evidence Manifest](docs/handoff/release-evidence-manifest-2026-07-13.md)
+- [Remaining Release Readiness](docs/checklist/remaining-release-readiness-2026-07-13.md)
 - [Taskbar Widget README](taskbar-widget/README.md)
