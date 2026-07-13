@@ -623,7 +623,6 @@ pub fn position_in_taskbar(
         margin,
         &parent_rect,
         &anchor_rect,
-        probe.start_button,
         &occupied_rects,
     );
     let desired_screen_top = parent_rect.top;
@@ -708,7 +707,6 @@ fn resolve_module_left(
     margin: i32,
     parent_rect: &RECT,
     right_anchor_rect: &RECT,
-    start_button: HWND,
     occupied_rects: &[RECT],
 ) -> i32 {
     if module_width <= 0 {
@@ -723,10 +721,7 @@ fn resolve_module_left(
                 parent_rect.right - module_width - margin
             }
         }
-        WidgetPlacement::Left => {
-            let _ = start_button;
-            parent_rect.left + margin
-        }
+        WidgetPlacement::Left => parent_rect.left + margin,
     };
 
     adjust_for_occupied_widgets(
@@ -833,7 +828,27 @@ fn is_candidate_peer_widget(hwnd: HWND, rect: &RECT, parent_rect: &RECT) -> bool
     }
 
     let class_name = window_class_name(hwnd);
-    !matches!(class_name.as_str(), "TaskbarWidgetWindow")
+    !is_system_taskbar_control_class(&class_name)
+}
+
+/// These classes belong to Explorer's taskbar chrome rather than third-party
+/// taskbar widgets. They must not affect the left widget's standard margin.
+fn is_system_taskbar_control_class(class_name: &str) -> bool {
+    matches!(
+        class_name,
+        "TaskbarWidgetWindow"
+            | "Start"
+            | "TrayDummySearchControl"
+            | "TrayNotifyWnd"
+            | "ReBarWindow32"
+            | "MSTaskSwWClass"
+            | "MSTaskListWClass"
+            | "ToolbarWindow32"
+            | "ClockButton"
+            | "TrayShowDesktopButtonWClass"
+            | "NotifyIconOverflowWindow"
+            | "TaskListThumbnailWnd"
+    )
 }
 
 fn window_class_name(hwnd: HWND) -> String {
@@ -1186,5 +1201,42 @@ mod tests {
             adjust_for_occupied_widgets(48, WidgetPlacement::Left, 80, 8, &parent_rect, &occupied);
 
         assert_eq!(left, 124);
+    }
+
+    #[test]
+    fn left_placement_keeps_the_standard_taskbar_margin() {
+        let parent_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 40,
+        };
+        let anchor_rect = parent_rect;
+
+        let left = resolve_module_left(
+            WidgetPlacement::Left,
+            80,
+            8,
+            &parent_rect,
+            &anchor_rect,
+            &[],
+        );
+
+        assert_eq!(left, 8);
+    }
+
+    #[test]
+    fn system_taskbar_controls_are_not_peer_widgets() {
+        for class_name in [
+            "Start",
+            "TrayNotifyWnd",
+            "MSTaskSwWClass",
+            "ToolbarWindow32",
+        ] {
+            assert!(is_system_taskbar_control_class(class_name));
+        }
+        assert!(!is_system_taskbar_control_class(
+            "TrafficMonitorTaskbarWidget"
+        ));
     }
 }

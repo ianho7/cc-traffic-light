@@ -99,7 +99,7 @@ export default function AppearancePage({
         </ActionButton>
       </div>
 
-      <label
+      {/* <label
         style={{
           display: "flex",
           alignItems: "center",
@@ -123,7 +123,7 @@ export default function AppearancePage({
         <span>
           Reduce motion — keep working, waiting, and error lights steadily visible.
         </span>
-      </label>
+      </label> */}
     </div>
   );
 }

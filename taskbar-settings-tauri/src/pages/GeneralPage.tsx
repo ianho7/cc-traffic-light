@@ -73,6 +73,26 @@ export default function GeneralPage({ settings, pending, onSettingChange }: Gene
             )
           }
         />
+        <ToggleMatrixCard
+          disabled={pending}
+          settingKey="WIDGET_PLACEMENT"
+          title={m.appearance_placement()}
+          type="pill"
+          value={
+            settings.widget_visual.placement === "left"
+              ? m.appearance_placement_left()
+              : m.appearance_placement_right()
+          }
+          onPress={() =>
+            onSettingChange(
+              (draft) => {
+                draft.widget_visual.placement =
+                  draft.widget_visual.placement === "left" ? "right" : "left";
+              },
+              ["widget_visual.placement"]
+            )
+          }
+        />
       </ToggleMatrix>
     </div>
   );

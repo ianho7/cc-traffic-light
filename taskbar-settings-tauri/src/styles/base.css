@@ -11,8 +11,22 @@ body {
   background: var(--bg, #f5f5f2);
   color: var(--ink, #151515);
   font-family: var(--ui, "SF Pro Display", "Segoe UI", Arial, sans-serif);
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+input:not([type]),
+input[type="text"],
+textarea {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input[type="range"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* ── 全局低透明点阵背景 ── */
