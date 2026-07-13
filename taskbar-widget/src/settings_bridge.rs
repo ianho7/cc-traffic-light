@@ -3,7 +3,7 @@ use std::sync::{Mutex, OnceLock};
 use shared_core::{
     app_config::changed_keys,
     settings_service::{SettingsService, SettingsServiceError},
-    tauri_ipc::SettingsSaveResultDto,
+    tauri_ipc::{HookStatus, HookStatusDto, SettingsSaveResultDto},
 };
 use taskbar_widget::{
     agent_state,
@@ -23,6 +23,7 @@ static SETTINGS_SNAPSHOT: OnceLock<Mutex<AppStatusSnapshot>> = OnceLock::new();
 static SETTINGS_CONFIG: OnceLock<Mutex<AppConfig>> = OnceLock::new();
 static MAIN_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 static SETTINGS_WINDOW_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
+const HOOK_ACTIVITY_WINDOW_MS: u64 = 5 * 60 * 1_000;
 
 pub struct HostSettingsBridge;
 
@@ -277,5 +278,280 @@ fn service_error_to_string(error: SettingsServiceError) -> String {
         | SettingsServiceError::Persistence(message)
         | SettingsServiceError::SnapshotUnavailable(message)
         | SettingsServiceError::Refresh(message) => message,
+    }
+}
+
+/// Detect whether Codex and Claude Code hooks are installed and active.
+pub fn detect_hook_status() -> HookStatusDto {
+    HookStatusDto {
+        codex: detect_agent_hook_status("codex"),
+        claude: detect_agent_hook_status("claude"),
+    }
+}
+
+pub fn should_show_hook_notification(status: &HookStatusDto) -> bool {
+    let all_ready =
+        matches!(status.codex, HookStatus::Active) && matches!(status.claude, HookStatus::Active);
+    let next_key = hook_notification_key(status);
+    let current_key = current_config().diagnostics.last_hook_notification_key;
+
+    if all_ready {
+        if current_key.is_some() {
+            if let Err(error) = update_config(|config| {
+                config.diagnostics.last_hook_notification_key = None;
+            }) {
+                win32::runtime_debug_log(&format!(
+                    "[hook-state] failed to clear startup notification key: {error}"
+                ));
+            }
+        }
+        return false;
+    }
+
+    let Some(next_key) = next_key else {
+        return false;
+    };
+    if current_key.as_deref() == Some(next_key.as_str()) {
+        return false;
+    }
+
+    if let Err(error) = update_config(|config| {
+        config.diagnostics.last_hook_notification_key = Some(next_key.clone());
+    }) {
+        win32::runtime_debug_log(&format!(
+            "[hook-state] failed to persist startup notification key: {error}"
+        ));
+    }
+    true
+}
+
+fn hook_notification_key(status: &HookStatusDto) -> Option<String> {
+    Some(format!(
+        "codex:{};claude:{}",
+        status.codex.as_str(),
+        status.claude.as_str()
+    ))
+}
+
+fn detect_agent_hook_status(agent: &str) -> HookStatus {
+    let hooks_path = std::env::var_os("USERPROFILE")
+        .map(|p| {
+            let mut path = std::path::PathBuf::from(p);
+            match agent {
+                "claude" => path.extend([".claude", "settings.json"]),
+                _ => path.extend([".codex", "hooks.json"]),
+            }
+            path
+        })
+        .unwrap_or_else(|| match agent {
+            "claude" => std::path::PathBuf::from(".claude/settings.json"),
+            _ => std::path::PathBuf::from(".codex/hooks.json"),
+        });
+
+    let hooks_text = std::fs::read_to_string(&hooks_path).ok();
+    let hooks_invalid = hooks_text
+        .as_deref()
+        .is_some_and(|text| serde_json::from_str::<serde_json::Value>(text).is_err());
+    let hooks_installed = hooks_text
+        .as_deref()
+        .is_some_and(|text| text.contains("CcTrafficLight") && text.contains(agent));
+
+    let state_path = agent_state::state_file_path();
+    let state_text = std::fs::read_to_string(&state_path).ok();
+    let state_invalid = state_text
+        .as_deref()
+        .is_some_and(|text| serde_json::from_str::<serde_json::Value>(text).is_err());
+    let state_recent = state_text
+        .as_deref()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+        .is_some_and(|value| state_has_recent_activity(&value, agent, agent_state::now_ms()));
+
+    classify_hook_status(
+        agent,
+        hooks_installed,
+        state_recent,
+        hooks_invalid || state_invalid,
+    )
+}
+
+fn classify_hook_status(
+    agent: &str,
+    hooks_installed: bool,
+    state_recent: bool,
+    has_error: bool,
+) -> HookStatus {
+    if has_error {
+        return HookStatus::Error;
+    }
+
+    match (hooks_installed, state_recent) {
+        (true, true) => HookStatus::Active,
+        (true, false) => HookStatus::ConfiguredUnverified,
+        (false, false) if agent == "claude" => HookStatus::ProcessOnly,
+        _ => HookStatus::NotInstalled,
+    }
+}
+
+fn state_has_recent_activity(value: &serde_json::Value, agent: &str, now_ms: u64) -> bool {
+    value
+        .get("agents")
+        .and_then(|agents| agents.get(agent))
+        .and_then(|summary| summary.get("updated_at"))
+        .and_then(|updated_at| updated_at.as_u64())
+        .is_some_and(|updated_at| now_ms.saturating_sub(updated_at) <= HOOK_ACTIVITY_WINDOW_MS)
+}
+
+/// Run install-codex-hooks.ps1 to deploy global Codex hooks.
+pub fn install_codex_hooks() -> (bool, String) {
+    let script_path = get_install_script_path();
+    if !script_path.exists() {
+        return (
+            false,
+            format!("install script not found: {}", script_path.display()),
+        );
+    }
+
+    match std::process::Command::new("powershell.exe")
+        .args([
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &script_path.to_string_lossy(),
+            "-Apply",
+        ])
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                (true, "hooks deployed successfully".to_string())
+            } else {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let detail = if stderr.trim().is_empty() {
+                    stdout.trim()
+                } else {
+                    stderr.trim()
+                };
+                (
+                    false,
+                    format!(
+                        "hooks deployment failed (exit={}): {}",
+                        output.status,
+                        if detail.is_empty() {
+                            "no diagnostic output"
+                        } else {
+                            detail
+                        }
+                    ),
+                )
+            }
+        }
+        Err(error) => (false, format!("failed to start powershell: {error}")),
+    }
+}
+
+fn get_install_script_path() -> std::path::PathBuf {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let local = exe_dir.join("scripts").join("install-codex-hooks.ps1");
+            if local.exists() {
+                return local;
+            }
+        }
+    }
+    std::env::var_os("LOCALAPPDATA")
+        .map(|p| {
+            let mut path = std::path::PathBuf::from(p);
+            path.extend([
+                "Programs",
+                "CC Traffic Light",
+                "scripts",
+                "install-codex-hooks.ps1",
+            ]);
+            path
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("install-codex-hooks.ps1"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn recent_activity_remains_active_after_task_completion() {
+        let value = json!({
+            "agents": {
+                "codex": {
+                    "updated_at": 9_000,
+                    "active_task_count": 0,
+                    "state": "idle"
+                }
+            }
+        });
+
+        assert!(state_has_recent_activity(&value, "codex", 9_000 + 1_000));
+    }
+
+    #[test]
+    fn old_activity_is_not_active() {
+        let value = json!({
+            "agents": {
+                "codex": {
+                    "updated_at": 1_000
+                }
+            }
+        });
+
+        assert!(!state_has_recent_activity(
+            &value,
+            "codex",
+            1_000 + HOOK_ACTIVITY_WINDOW_MS + 1
+        ));
+    }
+
+    #[test]
+    fn classifies_configured_without_recent_event_as_unverified() {
+        assert_eq!(
+            classify_hook_status("codex", true, false, false),
+            HookStatus::ConfiguredUnverified
+        );
+    }
+
+    #[test]
+    fn classifies_recent_configured_event_as_active() {
+        assert_eq!(
+            classify_hook_status("codex", true, true, false),
+            HookStatus::Active
+        );
+    }
+
+    #[test]
+    fn classifies_unconfigured_claude_as_process_only() {
+        assert_eq!(
+            classify_hook_status("claude", false, false, false),
+            HookStatus::ProcessOnly
+        );
+    }
+
+    #[test]
+    fn classifies_invalid_configuration_as_error() {
+        assert_eq!(
+            classify_hook_status("codex", false, false, true),
+            HookStatus::Error
+        );
+    }
+
+    #[test]
+    fn hook_notification_key_is_stable_for_same_status() {
+        let status = HookStatusDto {
+            codex: HookStatus::ConfiguredUnverified,
+            claude: HookStatus::ProcessOnly,
+        };
+
+        assert_eq!(
+            hook_notification_key(&status).as_deref(),
+            Some("codex:configured_unverified;claude:process_only")
+        );
     }
 }

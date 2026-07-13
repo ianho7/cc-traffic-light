@@ -26,6 +26,12 @@ fn main() -> ExitCode {
 
 fn run() -> Result<String, String> {
     let args = env::args().skip(1).collect::<Vec<_>>();
+
+    // --version must be checked before any subcommand parsing
+    if args.first().map(String::as_str) == Some("--version") {
+        return Ok(env!("CARGO_PKG_VERSION").to_string());
+    }
+
     let Some(command) = args.first().map(String::as_str) else {
         return Err(usage());
     };
@@ -120,11 +126,11 @@ fn handle_hook(args: &[String]) -> Result<String, String> {
     };
 
     agent_state::apply_hook_event(update).map_err(|error| error.to_string())?;
-    if agent == SourceId::Codex {
-        Ok("{}".to_string())
-    } else {
-        Ok(String::new())
-    }
+    // Codex treats a successful command hook with no stdout as success.  Do
+    // not emit an empty JSON object here: some Windows hook runners close the
+    // stdout pipe after delivering stdin, and `println!` would then panic
+    // after the state write has already succeeded.
+    Ok(String::new())
 }
 
 fn read_stdin() -> io::Result<String> {
@@ -172,7 +178,47 @@ fn parse_json_input(input: &str, allow_empty: bool) -> Result<Value, String> {
 
 fn usage() -> String {
     format!(
-        "usage: taskbar_widget_hook <codex|claude> <HookName> | sample | set <task_key> <state> | clear <task_key> | clear-all | list (pid={})",
+        "usage: taskbar_widget_hook <codex|claude> <HookName> | --version | sample | set <task_key> <state> | clear <task_key> | clear-all | list (pid={})",
         process::id()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_plain_utf8() {
+        assert_eq!(
+            decode_stdin_bytes(br#"{"session_id":"plain"}"#).unwrap(),
+            r#"{"session_id":"plain"}"#
+        );
+    }
+
+    #[test]
+    fn strips_utf8_bom() {
+        assert_eq!(
+            decode_stdin_bytes(&[0xEF, 0xBB, 0xBF, b'{', b'}']).unwrap(),
+            "{}"
+        );
+    }
+
+    #[test]
+    fn decodes_utf16_le_with_bom() {
+        let mut input = vec![0xFF, 0xFE];
+        for unit in "{}".encode_utf16() {
+            input.extend_from_slice(&unit.to_le_bytes());
+        }
+
+        assert_eq!(decode_stdin_bytes(&input).unwrap(), "{}");
+    }
+
+    #[test]
+    fn empty_input_is_allowed_for_hook_but_not_sampling() {
+        assert_eq!(
+            parse_json_input("", true).unwrap(),
+            Value::Object(Map::new())
+        );
+        assert!(parse_json_input("", false).is_err());
+    }
 }

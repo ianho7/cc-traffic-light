@@ -14,6 +14,7 @@ use std::mem::size_of;
 use std::panic::{self, PanicHookInfo};
 use std::process;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use taskbar::{AppState, DebugLoopConfig, probe_taskbar};
@@ -28,9 +29,7 @@ use taskbar_widget::{
 use windows::{
     Win32::{
         Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
-        Graphics::Gdi::{
-            BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT, ScreenToClient,
-        },
+        Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT, ScreenToClient},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DispatchMessageW,
@@ -66,6 +65,7 @@ struct WidgetRuntimeState {
     mount_state: WidgetMountState,
     last_attach_at: Option<u64>,
     last_retry_at: Option<u64>,
+    tray_registered: bool,
 }
 
 static PAINT_STATE: OnceLock<Mutex<PaintState>> = OnceLock::new();
@@ -74,6 +74,7 @@ static APP_STATUS_SNAPSHOT: OnceLock<Mutex<AppStatusSnapshot>> = OnceLock::new()
 static SETTINGS_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 static DEBUG_CONFIG: OnceLock<DebugLoopConfig> = OnceLock::new();
 static WIDGET_RUNTIME_STATE: OnceLock<Mutex<WidgetRuntimeState>> = OnceLock::new();
+static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 /// HCURSOR wraps `*mut c_void`, which is neither Send nor Sync,
 /// but cursor handles are safe to share across threads (read-only after init).
 struct SafeCursor(HCURSOR);
@@ -181,6 +182,17 @@ fn main() -> Result<()> {
         runtime_log(&format!(
             "tray icon add failed; continuing without tray icon: {error}"
         ));
+    } else {
+        set_tray_registered(true);
+        // One-time startup notification if hooks are not yet active
+        let hook_status = settings_bridge::detect_hook_status();
+        if settings_bridge::should_show_hook_notification(&hook_status) {
+            tray_icon::show_startup_notification(
+                hwnd,
+                &settings_bridge::current_config(),
+                hook_status,
+            );
+        }
     }
     unsafe {
         let hook_timer = SetTimer(hwnd, HOOK_STATE_TIMER_ID, HOOK_STATE_TIMER_MS, None);
@@ -326,6 +338,7 @@ unsafe extern "system" fn window_proc(
             LRESULT(0)
         }
         WM_CLOSE => {
+            SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
             set_runtime_stage("wm_close");
             runtime_log(&format!(
                 "WM_CLOSE received hwnd={}",
@@ -364,7 +377,11 @@ unsafe extern "system" fn window_proc(
                 "WM_NCDESTROY received hwnd={}",
                 win32::format_hwnd(hwnd)
             ));
-            unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+            let result = unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
+            if !SHUTDOWN_REQUESTED.load(Ordering::Relaxed) {
+                recover_destroyed_widget_window(hwnd);
+            }
+            result
         }
         _ => unsafe { DefWindowProcW(hwnd, message, wparam, lparam) },
     }
@@ -399,7 +416,12 @@ fn initialize_paint_state() {
     if let Some(lock) = PAINT_STATE.get()
         && let Ok(mut state) = lock.lock()
     {
-        state.effects.sync_snapshot(&snapshot, widget_effects::now_ms());
+        state
+            .effects
+            .set_reduced_motion(config.appearance.reduced_motion);
+        state
+            .effects
+            .sync_snapshot(&snapshot, widget_effects::now_ms());
     }
     runtime_log(&format!(
         "initialize_app_snapshot overall={} codex={} claude={}",
@@ -475,6 +497,9 @@ fn poll_hook_state(hwnd: HWND) {
             config_changed,
         ));
         current.snapshot = next_snapshot.clone();
+        current
+            .effects
+            .set_reduced_motion(config.appearance.reduced_motion);
         let snapshot_for_effects = current.snapshot.clone();
         current
             .effects
@@ -483,6 +508,9 @@ fn poll_hook_state(hwnd: HWND) {
             let _ = InvalidateRect(hwnd, None, true);
         }
     } else {
+        current
+            .effects
+            .set_reduced_motion(config.appearance.reduced_motion);
         current
             .effects
             .sync_snapshot(&next_snapshot, widget_effects::now_ms());
@@ -501,6 +529,64 @@ fn poll_hook_state(hwnd: HWND) {
         tray_icon::sync_tray_state(hwnd, &snapshot, &settings_bridge::current_config());
     }
     sync_settings_hosts();
+}
+
+fn recover_destroyed_widget_window(destroyed_hwnd: HWND) {
+    runtime_log(&format!(
+        "widget window destroyed without shutdown; starting recovery old_hwnd={}",
+        win32::format_hwnd(destroyed_hwnd)
+    ));
+    let Some(debug_config) = DEBUG_CONFIG.get() else {
+        runtime_log("widget recovery skipped: debug config unavailable");
+        return;
+    };
+    let Ok(hmodule) = (unsafe { GetModuleHandleW(None) }) else {
+        runtime_log("widget recovery failed: GetModuleHandleW");
+        return;
+    };
+    let new_hwnd = match unsafe {
+        CreateWindowExW(
+            window_ex_style(),
+            WINDOW_CLASS_NAME,
+            WINDOW_TITLE,
+            window_style(),
+            0,
+            0,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            HWND::default(),
+            None,
+            HINSTANCE(hmodule.0),
+            None,
+        )
+    } {
+        Ok(hwnd) => hwnd,
+        Err(error) => {
+            runtime_log(&format!("widget recovery failed: CreateWindowExW {error}"));
+            return;
+        }
+    };
+
+    settings_bridge::bind_main_window(new_hwnd);
+    tray_icon::remove_tray_icon(destroyed_hwnd);
+    set_tray_registered(false);
+    unsafe {
+        let _ = SetTimer(new_hwnd, HOOK_STATE_TIMER_ID, HOOK_STATE_TIMER_MS, None);
+        let _ = SetTimer(new_hwnd, ANIMATION_TIMER_ID, ANIMATION_TIMER_MS, None);
+    }
+    if let Some(lock) = WIDGET_RUNTIME_STATE.get()
+        && let Ok(mut state) = lock.lock()
+    {
+        state.mount_state = WidgetMountState::Retrying;
+        state.last_retry_at = None;
+    }
+    runtime_log(&format!(
+        "widget recovery created new_hwnd={} timers_armed=true; attach will retry",
+        win32::format_hwnd(new_hwnd)
+    ));
+    attempt_widget_recovery(new_hwnd);
+    poll_hook_state(new_hwnd);
+    let _ = debug_config;
 }
 
 fn paint_window(hwnd: HWND) -> LRESULT {
@@ -666,6 +752,10 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                     runtime_log(&format!(
                         "tauri settings open failed; falling back to Win32 settings window: {error}"
                     ));
+                    tray_icon::show_settings_fallback_notification(
+                        hwnd,
+                        &settings_bridge::current_config(),
+                    );
                 }
             }
             if let Some(settings_hwnd) = current_settings_hwnd() {
@@ -680,15 +770,15 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                     "manual_refresh requested overall={} codex={} claude={}",
                     snapshot.overall_state.as_str(),
                     snapshot
-                .sources
-                .get("codex")
-                .map(|source| source.state.as_str())
-                .unwrap_or("idle"),
+                        .sources
+                        .get("codex")
+                        .map(|source| source.state.as_str())
+                        .unwrap_or("idle"),
                     snapshot
-                .sources
-                .get("claude")
-                .map(|source| source.state.as_str())
-                .unwrap_or("idle")
+                        .sources
+                        .get("claude")
+                        .map(|source| source.state.as_str())
+                        .unwrap_or("idle")
                 ));
             }
             poll_hook_state(hwnd);
@@ -726,6 +816,7 @@ fn initialize_widget_runtime_state(mount_state: WidgetMountState) {
         mount_state,
         last_attach_at: (mount_state == WidgetMountState::Attached).then_some(now),
         last_retry_at: None,
+        tray_registered: false,
     };
     let _ = WIDGET_RUNTIME_STATE.set(Mutex::new(state));
 }
@@ -793,6 +884,8 @@ fn attempt_widget_recovery(hwnd: HWND) {
         return;
     };
     if state.mount_state == WidgetMountState::Attached {
+        drop(state);
+        ensure_tray_icon(hwnd);
         return;
     }
 
@@ -807,6 +900,8 @@ fn attempt_widget_recovery(hwnd: HWND) {
     state.mount_state = WidgetMountState::Retrying;
     state.last_retry_at = Some(now);
     drop(state);
+
+    ensure_tray_icon(hwnd);
 
     let Some(debug_config) = DEBUG_CONFIG.get() else {
         return;
@@ -832,6 +927,41 @@ fn attempt_widget_recovery(hwnd: HWND) {
     }
     if recovered {
         taskbar::refresh_visibility(hwnd, &layout, debug_config);
+    }
+}
+
+fn ensure_tray_icon(hwnd: HWND) {
+    let Some(lock) = WIDGET_RUNTIME_STATE.get() else {
+        return;
+    };
+    let Ok(state) = lock.lock() else {
+        return;
+    };
+    if state.tray_registered {
+        return;
+    }
+    drop(state);
+
+    match tray_icon::add_tray_icon(hwnd, &settings_bridge::current_config()) {
+        Ok(()) => {
+            set_tray_registered(true);
+            runtime_log(&format!(
+                "tray icon registered hwnd={} during recovery",
+                win32::format_hwnd(hwnd)
+            ));
+        }
+        Err(error) => runtime_log(&format!(
+            "tray icon registration pending hwnd={} error={error}",
+            win32::format_hwnd(hwnd)
+        )),
+    }
+}
+
+fn set_tray_registered(tray_registered: bool) {
+    if let Some(lock) = WIDGET_RUNTIME_STATE.get()
+        && let Ok(mut state) = lock.lock()
+    {
+        state.tray_registered = tray_registered;
     }
 }
 

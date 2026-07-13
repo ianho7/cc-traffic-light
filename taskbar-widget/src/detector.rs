@@ -281,3 +281,72 @@ fn utf16_to_string(value: &[u16]) -> String {
         .unwrap_or(value.len());
     String::from_utf16_lossy(&value[..end])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn status(source_id: SourceId, state: SourceVisualState) -> SourceStatus {
+        SourceStatus {
+            source_id,
+            state,
+            confidence: SourceConfidence::Confirmed,
+            method: DetectionMethod::StateFile,
+            updated_at: 1,
+            message: None,
+        }
+    }
+
+    fn observation(
+        kind: DetectionMethod,
+        state: SourceVisualState,
+        updated_at: u64,
+    ) -> SourceObservation {
+        SourceObservation {
+            source_id: SourceId::Codex,
+            kind,
+            state,
+            confidence: SourceConfidence::Confirmed,
+            updated_at,
+            message: None,
+        }
+    }
+
+    #[test]
+    fn overall_state_uses_error_then_attention_then_working_priority() {
+        assert_eq!(
+            aggregate_overall_state(
+                [
+                    status(SourceId::Codex, SourceVisualState::Completed),
+                    status(SourceId::Claude, SourceVisualState::Working),
+                    status(SourceId::Claude, SourceVisualState::NeedsAttention),
+                    status(SourceId::Codex, SourceVisualState::Error),
+                ]
+                .iter()
+            ),
+            SourceVisualState::Error
+        );
+    }
+
+    #[test]
+    fn state_file_observation_wins_over_process_fallback() {
+        let result = aggregate_source_status(
+            SourceId::Codex,
+            vec![
+                observation(
+                    DetectionMethod::Process,
+                    SourceVisualState::Error,
+                    99,
+                ),
+                observation(
+                    DetectionMethod::StateFile,
+                    SourceVisualState::Working,
+                    1,
+                ),
+            ],
+        );
+
+        assert_eq!(result.method, DetectionMethod::StateFile);
+        assert_eq!(result.state, SourceVisualState::Working);
+    }
+}

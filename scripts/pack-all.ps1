@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipFrontend
+    [switch]$SkipFrontend,
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,12 +31,33 @@ function Show-Artifact {
 
     $path = Join-Path $repoRoot $RelativePath
     if (-not (Test-Path $path)) {
-        Write-Warning "$Label missing: $path"
-        return
+        throw "$Label missing: $path"
     }
 
     $item = Get-Item $path
     Write-Host ("    {0}: {1} | {2:yyyy-MM-dd HH:mm:ss} | {3} bytes" -f $Label, $item.FullName, $item.LastWriteTime, $item.Length)
+}
+
+if ($ValidateOnly) {
+    Invoke-Step -Name 'Validate release hook CLI' -Action {
+        $hookPath = Join-Path $repoRoot 'target\release\taskbar_widget_hook.exe'
+        if (-not (Test-Path $hookPath)) {
+            throw "Hook CLI artifact missing: $hookPath"
+        }
+
+        $version = (& $hookPath --version | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Hook CLI version check returned no output: $hookPath"
+        }
+        Write-Host "    Hook CLI version: $version"
+    }
+
+    Write-Host '==> Release artifacts' -ForegroundColor Cyan
+    Show-Artifact -Label 'Host' -RelativePath 'target\release\taskbar-widget.exe'
+    Show-Artifact -Label 'Tauri settings' -RelativePath 'target\release\taskbar-settings-tauri.exe'
+    Show-Artifact -Label 'Hook CLI' -RelativePath 'target\release\taskbar_widget_hook.exe'
+    Write-Host '==> Release artifact validation complete' -ForegroundColor Green
+    exit 0
 }
 
 if (-not $SkipFrontend) {
@@ -54,6 +76,13 @@ Invoke-Step -Name 'Build standalone Tauri settings binary (release)' -Action {
     }
 }
 
+Invoke-Step -Name 'Build hook CLI (release)' -Action {
+    & cargo build -p taskbar-widget --bin taskbar_widget_hook --release --offline
+    if ($LASTEXITCODE -ne 0) {
+        throw "Hook CLI release build failed with exit code $LASTEXITCODE."
+    }
+}
+
 Invoke-Step -Name 'Build Win32 host binary (release)' -Action {
     & cargo build -p taskbar-widget --release --offline
     if ($LASTEXITCODE -ne 0) {
@@ -61,9 +90,23 @@ Invoke-Step -Name 'Build Win32 host binary (release)' -Action {
     }
 }
 
+Invoke-Step -Name 'Validate release hook CLI' -Action {
+    $hookPath = Join-Path $repoRoot 'target\release\taskbar_widget_hook.exe'
+    if (-not (Test-Path $hookPath)) {
+        throw "Hook CLI artifact missing: $hookPath"
+    }
+
+    $version = (& $hookPath --version | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Hook CLI version check returned no output: $hookPath"
+    }
+    Write-Host "    Hook CLI version: $version"
+}
+
 Write-Host '==> Release artifacts' -ForegroundColor Cyan
 Show-Artifact -Label 'Host' -RelativePath 'target\release\taskbar-widget.exe'
 Show-Artifact -Label 'Tauri settings' -RelativePath 'target\release\taskbar-settings-tauri.exe'
+Show-Artifact -Label 'Hook CLI' -RelativePath 'target\release\taskbar_widget_hook.exe'
 
 Write-Host '==> Pack complete — ready to compile installer.iss' -ForegroundColor Green
 Write-Host '    Run: ISCC installer.iss' -ForegroundColor Yellow

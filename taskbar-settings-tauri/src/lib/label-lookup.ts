@@ -8,6 +8,7 @@ import { m } from "../paraglide/messages.js";
 export const SOURCE_LABELS: Record<string, () => string> = {
   codex: m.source_label_codex,
   claude: m.source_label_claude,
+  // Legacy snapshots may still use this alias; new DTOs emit `claude`.
   claude_code: m.source_label_claude,
 };
 

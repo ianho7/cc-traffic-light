@@ -10,52 +10,52 @@
 # - first run sample mode or a dump hook to verify the real payload shape.
 #
 # Build first:
-#   cd D:\project\cc-traffic-light\taskbar-widget
+#   cd taskbar-widget
 #   cargo build
 
 [[hooks.SessionStart]]
 matcher = "startup|resume|clear|compact"
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex SessionStart'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex SessionStart'
+command = '{install_dir}\taskbar_widget_hook.exe codex SessionStart'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex SessionStart'
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex UserPromptSubmit'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex UserPromptSubmit'
+command = '{install_dir}\taskbar_widget_hook.exe codex UserPromptSubmit'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex UserPromptSubmit'
 
 [[hooks.PreToolUse]]
 matcher = "*"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PreToolUse'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PreToolUse'
+command = '{install_dir}\taskbar_widget_hook.exe codex PreToolUse'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex PreToolUse'
 
 [[hooks.PermissionRequest]]
 matcher = "*"
 [[hooks.PermissionRequest.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PermissionRequest'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PermissionRequest'
+command = '{install_dir}\taskbar_widget_hook.exe codex PermissionRequest'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex PermissionRequest'
 
 [[hooks.PostToolUse]]
 matcher = "*"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PostToolUse'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex PostToolUse'
+command = '{install_dir}\taskbar_widget_hook.exe codex PostToolUse'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex PostToolUse'
 
 [[hooks.SubagentStop]]
 matcher = "*"
 [[hooks.SubagentStop.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex SubagentStop'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex SubagentStop'
+command = '{install_dir}\taskbar_widget_hook.exe codex SubagentStop'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex SubagentStop'
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex Stop'
-command_windows = 'D:\project\cc-traffic-light\target\debug\taskbar_widget_hook.exe codex Stop'
+command = '{install_dir}\taskbar_widget_hook.exe codex Stop'
+command_windows = '{install_dir}\taskbar_widget_hook.exe codex Stop'

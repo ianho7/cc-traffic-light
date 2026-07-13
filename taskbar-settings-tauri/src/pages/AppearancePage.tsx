@@ -98,6 +98,32 @@ export default function AppearancePage({
           {m.appearance_reset()}
         </ActionButton>
       </div>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginTop: 20,
+          color: "#f2f2f2",
+          cursor: pending ? "not-allowed" : "pointer"
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={settings.appearance.reduced_motion}
+          disabled={pending}
+          onChange={(event) =>
+            onSettingChange(
+              (draft) => { draft.appearance.reduced_motion = event.currentTarget.checked; },
+              ["appearance.reduced_motion"]
+            )
+          }
+        />
+        <span>
+          Reduce motion — keep working, waiting, and error lights steadily visible.
+        </span>
+      </label>
     </div>
   );
 }

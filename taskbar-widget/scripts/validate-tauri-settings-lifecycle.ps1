@@ -17,7 +17,6 @@ $candidateTargetDirs = @(
     (Join-Path $taskbarWidgetDir "target\$Configuration")
 )
 $hostClassName = "TaskbarWidgetWindow"
-$settingsWindowTitle = "CC Traffic Light Settings"
 $trayCmdOpenSettings = 1001
 $wmCommand = 0x0111
 $wmClose = 0x0010
@@ -35,9 +34,6 @@ using System.Text;
 
 public static class LifecycleUser32 {
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern IntPtr FindWindowW(string lpClassName, string lpWindowName);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool PostMessageW(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam);
@@ -209,16 +205,13 @@ function Find-HostWindow {
 }
 
 function Find-SettingsWindow {
-    $byTitle = [LifecycleUser32]::FindWindowW($null, $settingsWindowTitle)
-    if ($byTitle -ne [IntPtr]::Zero) {
-        return $byTitle
-    }
-
     $settingsProcesses = Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe
     if ($settingsProcesses.Count -ne 1) {
         return [IntPtr]::Zero
     }
 
+    # The host's native fallback uses the same title, so title-only lookup is
+    # unsafe. Always resolve the window through the settings process PID.
     return [LifecycleUser32]::FindTopLevelWindowByProcessId($settingsProcesses[0].Id)
 }
 
@@ -252,7 +245,7 @@ function Send-HostClose {
 function Send-SettingsClose {
     $hwnd = Find-SettingsWindow
     if ($hwnd -eq [IntPtr]::Zero) {
-        throw "Settings window not found for title $settingsWindowTitle"
+        throw "Settings window not found for the managed settings process"
     }
     $ok = [LifecycleUser32]::PostMessageW($hwnd, [uint32]$wmClose, [System.UIntPtr]::Zero, [IntPtr]::Zero)
     if (-not $ok) {

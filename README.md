@@ -89,13 +89,15 @@ cargo build -p taskbar-widget --offline
 | 工作中 | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` | `UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart` | 🟢⚪⚪ | 左边绿灯慢闪 |
 | 需要关注 | `PermissionRequest` | `PermissionRequest` | ⚪🟡⚪ | 中间黄灯快闪 |
 | 已完成 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 | `Stop`、`SubagentStop`；仅在明确完成事件下进入，并在短窗口后回到空闲 | 🟢⚪⚪ | 左边绿灯常亮不闪 |
-| 错误 | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure`，以及带明确失败语义的 `Stop` | ⚪⚪🔴 | 右边红灯慢闪 |
+| 错误 | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure` | `StopFailure`、`PostToolUseFailure`、`ToolUseFailure` | ⚪⚪🔴 | 右边红灯慢闪 |
 
 补充约束：
 
 - `Notification` 当前不直接映射为 `需要关注`，避免把普通通知误报成等待用户操作。
+- `Stop` / `SubagentStop` 表示本轮结束，固定映射为已完成；不根据最终自然语言消息中的“失败”等词推断错误。错误只由显式 `*Failure` hook 产生。
 - 当底层信号不足以证明 `需要关注 / 已完成 / 错误` 时，产品层优先保守回 `空闲`。
 - overall 主状态优先级为：`错误 > 需要关注 > 工作中 > 已完成 > 空闲`。
+- Claude Code command hooks 在当前 Windows 环境仍属于实验能力，不能仅凭配置文件存在判定为已就绪；未获得稳定 hook 事件时使用进程检测降级。
 
 ## 文档导航
 

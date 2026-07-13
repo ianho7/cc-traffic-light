@@ -1,5 +1,6 @@
 use crate::win32::{self, wide_null};
 use image::load_from_memory;
+use shared_core::tauri_ipc::HookStatusDto;
 use std::sync::OnceLock;
 use taskbar_widget::{app_config::AppConfig, i18n::Localizer, ui_state::AppStatusSnapshot};
 use windows::{
@@ -11,8 +12,8 @@ use windows::{
         },
         UI::{
             Shell::{
-                NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW,
-                Shell_NotifyIconW,
+                NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIIF_WARNING, NIM_ADD,
+                NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW,
             },
             WindowsAndMessaging::{
                 AppendMenuW, CreateIconIndirect, CreatePopupMenu, DestroyIcon, DestroyMenu,
@@ -62,6 +63,58 @@ pub fn sync_tray_state(hwnd: HWND, snapshot: &AppStatusSnapshot, config: &AppCon
     copy_tooltip(&mut data.szTip, &localizer.tray_tooltip(snapshot));
     unsafe {
         let _ = Shell_NotifyIconW(NIM_MODIFY, &mut data);
+    }
+}
+
+/// Show a tray balloon notification (info level). Only the first call per process
+/// will actually show; subsequent calls are no-ops to avoid spamming the user.
+pub fn show_startup_notification(hwnd: HWND, config: &AppConfig, hook_status: HookStatusDto) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static NOTIFIED: AtomicBool = AtomicBool::new(false);
+    if NOTIFIED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+
+    let localizer = Localizer::for_config(config);
+    let mut data = notify_icon_data(hwnd, config);
+    data.uFlags |= NIF_INFO;
+    data.dwInfoFlags = NIIF_INFO;
+
+    let title = "CC Traffic Light";
+    copy_wide_field(&mut data.szInfoTitle, title);
+
+    let message = localizer.hooks_notification(hook_status);
+    copy_wide_field(&mut data.szInfo, &message);
+
+    unsafe {
+        let _ = Shell_NotifyIconW(NIM_MODIFY, &mut data);
+    }
+}
+
+pub fn show_settings_fallback_notification(hwnd: HWND, config: &AppConfig) {
+    let localizer = Localizer::for_config(config);
+    let mut data = notify_icon_data(hwnd, config);
+    data.uFlags |= NIF_INFO;
+    data.dwInfoFlags = NIIF_WARNING;
+    copy_wide_field(&mut data.szInfoTitle, "CC Traffic Light");
+    copy_wide_field(
+        &mut data.szInfo,
+        &localizer.text("tray.notification.settings_fallback"),
+    );
+    unsafe {
+        let _ = Shell_NotifyIconW(NIM_MODIFY, &mut data);
+    }
+}
+
+fn copy_wide_field(target: &mut [u16], value: &str) {
+    let wide = win32::wide_text(value);
+    for (i, code_unit) in wide
+        .iter()
+        .copied()
+        .enumerate()
+        .take(target.len().saturating_sub(1))
+    {
+        target[i] = code_unit;
     }
 }
 
@@ -166,7 +219,6 @@ fn copy_tooltip(target: &mut [u16], value: &str) {
         target[index] = code_unit;
     }
 }
-
 
 fn tray_icon_handle_for_overall(overall: &str) -> windows::Win32::UI::WindowsAndMessaging::HICON {
     let cache = TRAY_ICON_CACHE.get_or_init(build_tray_icon_cache);

@@ -27,6 +27,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "target\release\taskbar-widget.exe";        DestDir: "{app}"; Flags: ignoreversion
 Source: "target\release\taskbar-settings-tauri.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "target\release\taskbar_widget_hook.exe";   DestDir: "{app}"; Flags: ignoreversion
+Source: "taskbar-widget\scripts\install-codex-hooks.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}";   Filename: "{app}\{#MyAppExeName}"
@@ -43,5 +45,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 Name: "autostart"; Description: "开机自动启动 {#MyAppName}"; GroupDescription: "启动选项："
 
 [Run]
+; 安装后自动部署全局 Codex hooks
+Filename: "powershell.exe"; \
+    Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-codex-hooks.ps1"" -Apply -HookExecutablePath ""{app}\taskbar_widget_hook.exe"""; \
+    Flags: runhidden postinstall nowait skipifsilent shellexec; \
+    Description: "部署 Codex 监控 hooks"
+
 Filename: "{app}\{#MyAppExeName}"; Description: "运行 {#MyAppName}"; \
     Flags: postinstall nowait skipifsilent shellexec

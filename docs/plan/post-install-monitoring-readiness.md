@@ -1,12 +1,14 @@
 # 安装后首次运行体验：完整监控链路实施计划
 
+> 状态说明（2026-07-10）：本文保留为历史实施计划。当前 installer.iss 已包含三个 exe，scripts/pack-all.ps1 已显式构建并验收 hook CLI；Claude Code command hooks 在当前 Windows 环境仍不能作为稳定生产能力，当前结论以 docs/plan/end-to-end-install-monitoring-audit.md 和最新 retrospective 为准。
+
 ## Objective
 
 使用户安装 CC Traffic Light 后，首次打开就能**高置信度地**（不只是进程存在检测）监控 Codex 和 Claude Code 的活动状态，覆盖 Working / NeedsAttention / Completed 等完整红绿灯语义。
 
 ### 解决的问题
 
-- 当前安装器只装了两个 exe，缺少 hook 写入二进制，hooks 链路在部署层面断裂
+- 历史版本的安装器只装了两个 exe，曾缺少 hook 写入二进制；当前 installer.iss 已包含 taskbar_widget_hook.exe
 - 项目级 `.codex/hooks.json` 仍硬编码开发路径，release 安装后无效
 - 全局 hook 安装脚本已实现但未接入安装器，且默认二进制路径不一致
 - Claude Code 的 hook payload 形状从未被验证过，属于未知可行性
@@ -81,9 +83,9 @@ taskbar-widget.exe → detector::build_status_snapshot → InvalidateRect → re
 
 | 文件 | 角色 | 状态 |
 |---|---|---|
-| `installer.iss` | 安装器定义 | ❌ 缺少 `taskbar_widget_hook.exe`，未调用 hooks 部署脚本 |
-| `.codex/hooks.json` | 项目级 Codex hooks | ❌ 命令路径指向 dev debug 目录，release 无效 |
-| `taskbar-widget/scripts/install-codex-hooks.ps1` | 全局 Codex hooks 安装器 | ✅ 完整但未接入安装器，默认路径冲突 |
+| `installer.iss` | 安装器定义 | ✅ 已包含三个 exe；仍需完成最终清洁安装、升级和卸载验收 |
+| `.codex/hooks.json` | 项目级 Codex hooks | ⚠️ 仅作为开发 fixture；正式路径由全局安装脚本管理 |
+| `taskbar-widget/scripts/install-codex-hooks.ps1` | 全局 Codex hooks 安装器 | ✅ 已有 merge/backup/restore；需继续完成清洁安装和真实 Codex 事件验收 |
 | `taskbar-widget/examples.claude-hooks.json` | Claude Code hooks 示例 | ❌ 从未经过真实验证 |
 | `taskbar-widget/src/bin/taskbar_widget_hook.rs` | hook 写入二进制 | ✅ 完整 |
 | `taskbar-widget/src/agent_state.rs` | 状态文件读写 | ✅ 完整 |
@@ -93,7 +95,7 @@ taskbar-widget.exe → detector::build_status_snapshot → InvalidateRect → re
 
 当前 `install-codex-hooks.ps1` 的默认二进制路径：
 ```
-$env:LOCALAPPDATA\CcTrafficLight\bin\taskbar_widget_hook.exe
+$env:LOCALAPPDATA\Programs\CC Traffic Light\taskbar_widget_hook.exe
 ```
 
 安装器实际路径：
@@ -101,7 +103,7 @@ $env:LOCALAPPDATA\CcTrafficLight\bin\taskbar_widget_hook.exe
 {localappdata}\Programs\CC Traffic Light\taskbar_widget_hook.exe
 ```
 
-两者不一致。部署前必须统一。
+与 installer.iss 的 `{app}` 目录契约一致；仍需在真实安装后的路径上验收。
 
 ### Claude Code 不确定项
 
@@ -381,6 +383,8 @@ Get-ChildItem "$env:TEMP\cc-traffic-light-claude-hooks" -Filter "claude-hook-*.j
 
 ## Open Questions
 
+> Historical status update (2026-07-10): the old path-conflict question below is resolved. The current default is the stable Programs\CC Traffic Light installation path, matching installer.iss. The remaining work is real installation, upgrade and uninstall verification.
+
 1. **`install-codex-hooks.ps1` 的路径统一问题**：当前默认路径是 `$env:LOCALAPPDATA\CcTrafficLight\bin\`，安装器路径是 `{localappdata}\Programs\CC Traffic Light\`。是改脚本默认值，还是改安装器路径？—— 推荐改脚本默认值，因为安装器路径已发布过，更稳定。
 
 2. **安装器是否该内联 PowerShell 脚本逻辑？** 用 Inno Setup Pascal 脚本直接操作 JSON 可以避免 PowerShell 执行策略问题，但代码量大得多。当前推荐先走 `[Run]` + PowerShell，P4 阶段再优化。
@@ -393,7 +397,9 @@ Get-ChildItem "$env:TEMP\cc-traffic-light-claude-hooks" -Filter "claude-hook-*.j
 
 ## Recommended Next Step
 
-**执行 Phase 1 的任务 1-2：修改 `installer.iss` 和 `install-codex-hooks.ps1` 默认路径。**
+> The historical Phase 1 next step has been completed. Continue with docs/checklist/end-to-end-install-monitoring-audit.md, starting at AUD-1-04 and the remaining installation gates.
+
+**历史 next step 已完成。当前 next step 请执行 docs/checklist/end-to-end-install-monitoring-audit.md 的 AUD-1-04 及之后任务。**
 
 这是最简单的步骤，而且是后续所有步骤的依赖——没有二进制、路径不统一，后面什么都做不了。具体来说：
 

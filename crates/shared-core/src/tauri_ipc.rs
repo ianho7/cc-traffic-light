@@ -50,6 +50,34 @@ pub struct SettingsRefreshResultDto {
     pub accepted: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HookStatus {
+    NotInstalled,
+    ConfiguredUnverified,
+    Active,
+    ProcessOnly,
+    Error,
+}
+
+impl HookStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::NotInstalled => "not_installed",
+            Self::ConfiguredUnverified => "configured_unverified",
+            Self::Active => "active",
+            Self::ProcessOnly => "process_only",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HookStatusDto {
+    pub codex: HookStatus,
+    pub claude: HookStatus,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SettingsIpcCommand {
     #[serde(rename = "get_snapshot")]
@@ -62,6 +90,10 @@ pub enum SettingsIpcCommand {
     RequestRefresh,
     #[serde(rename = "notify_settings_applied")]
     NotifySettingsApplied { applied_keys: Vec<String> },
+    #[serde(rename = "get_hook_status")]
+    GetHookStatus,
+    #[serde(rename = "install_codex_hooks")]
+    InstallCodexHooks,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -83,6 +115,10 @@ pub enum SettingsIpcResponse {
     RequestRefresh { result: SettingsRefreshResultDto },
     #[serde(rename = "notify_settings_applied")]
     NotifySettingsApplied { acknowledged: bool },
+    #[serde(rename = "get_hook_status")]
+    GetHookStatus { status: HookStatusDto },
+    #[serde(rename = "install_codex_hooks")]
+    InstallCodexHooks { success: bool, message: String },
     #[serde(rename = "error")]
     Error { message: String },
 }

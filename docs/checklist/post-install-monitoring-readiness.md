@@ -6,6 +6,8 @@
 
 使安装 CC Traffic Light 后首次打开，就能高置信度监控 Codex 和 Claude Code 的活动状态。
 
+> 当前状态（2026-07-10）：本 checklist 的部分早期条目描述的是历史缺口。installer.iss 当前已包含三个 exe，hook CLI 已支持 --version，Codex merge/restore fixture 已通过。持续执行请以 end-to-end-install-monitoring-audit.md 为主。
+
 **Target outcome:**
 - 安装器包含 `taskbar_widget_hook.exe`，安装后自动部署全局 Codex hooks
 - Claude Code payload 已验证或明确记录其限制
@@ -20,11 +22,11 @@
 ## Pre-Implementation Checks
 
 - [ ] CSW-PRE-01 确认计划文档已写入 `docs/plan/post-install-monitoring-readiness.md`
-- [ ] CSW-PRE-02 阅读 `installer.iss`，确认当前 `[Files]` 只包含两个 exe
+- [x] CSW-PRE-02 阅读 `installer.iss`；历史上只包含两个 exe，当前已包含 taskbar-widget、taskbar-settings-tauri 和 taskbar_widget_hook 三个 exe
 - [ ] CSW-PRE-03 阅读 `taskbar-widget/scripts/install-codex-hooks.ps1`，确认第 3 行 `$HookExecutablePath` 的默认值
 - [ ] CSW-PRE-04 阅读 `.codex/hooks.json`，确认当前所有 command 路径指向 dev debug 目录
 - [ ] CSW-PRE-05 阅读 `taskbar-widget/examples.claude-hooks.json`，确认当前示例配置的结构
-- [ ] CSW-PRE-06 阅读 `taskbar-widget/src/bin/taskbar_widget_hook.rs`，确认 `--version` 自检目前不存在
+- [x] CSW-PRE-06 阅读 `taskbar-widget/src/bin/taskbar_widget_hook.rs`，确认当前已支持 `--version`
 - [ ] CSW-PRE-07 确认 `cargo build -p taskbar-widget --release --offline` 能否正常生成 `taskbar_widget_hook.exe`
 
 ---

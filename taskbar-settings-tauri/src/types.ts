@@ -52,6 +52,7 @@ export interface AppConfig {
   diagnostics: {
     last_opened_page: SettingsPageId;
     last_manual_refresh_at: number | null;
+    last_hook_notification_key: string | null;
   };
 }
 
@@ -92,4 +93,16 @@ export interface SettingsSaveResultDto {
 
 export interface SettingsRefreshResultDto {
   accepted: boolean;
+}
+
+export type HookStatus =
+  | "not_installed"
+  | "configured_unverified"
+  | "active"
+  | "process_only"
+  | "error";
+
+export interface HookStatusDto {
+  codex: HookStatus;
+  claude: HookStatus;
 }

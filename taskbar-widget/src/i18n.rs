@@ -9,6 +9,7 @@ use crate::{
         SourceVisualState, WidgetMountState,
     },
 };
+use shared_core::tauri_ipc::{HookStatus, HookStatusDto};
 
 const EN_RESOURCE: &str = include_str!("../ui/i18n/en.json");
 const ZH_CN_RESOURCE: &str = include_str!("../ui/i18n/zh-CN.json");
@@ -215,6 +216,42 @@ impl Localizer {
             claude
         )
     }
+
+    pub fn hooks_notification(&self, status: HookStatusDto) -> String {
+        let mut messages = Vec::new();
+
+        match status.codex {
+            HookStatus::Active => {}
+            HookStatus::ConfiguredUnverified => {
+                messages.push(self.text("tray.notification.codex_trust"));
+            }
+            HookStatus::NotInstalled => {
+                messages.push(self.text("tray.notification.codex_not_installed"));
+            }
+            HookStatus::Error => messages.push(self.text("tray.notification.codex_error")),
+            HookStatus::ProcessOnly => {}
+        }
+
+        match status.claude {
+            HookStatus::Active => {}
+            HookStatus::ProcessOnly => {
+                messages.push(self.text("tray.notification.claude_process_only"));
+            }
+            HookStatus::ConfiguredUnverified => {
+                messages.push(self.text("tray.notification.claude_unverified"));
+            }
+            HookStatus::NotInstalled => {
+                messages.push(self.text("tray.notification.claude_not_installed"));
+            }
+            HookStatus::Error => messages.push(self.text("tray.notification.claude_error")),
+        }
+
+        if messages.is_empty() {
+            self.text("tray.notification.all_ready")
+        } else {
+            messages.join(" ")
+        }
+    }
 }
 
 pub fn effective_locale(config: &AppConfig) -> AppLocale {
@@ -284,5 +321,20 @@ mod tests {
 
         assert_eq!(localizer.locale(), AppLocale::ZhCn);
         assert_eq!(localizer.text("settings.nav.general"), "通用");
+    }
+
+    #[test]
+    fn hooks_notification_explains_each_non_ready_source() {
+        let mut config = AppConfig::default_v1();
+        config.localization.language = AppLanguage::En;
+        let localizer = Localizer::for_config(&config);
+
+        let message = localizer.hooks_notification(HookStatusDto {
+            codex: HookStatus::ConfiguredUnverified,
+            claude: HookStatus::ProcessOnly,
+        });
+
+        assert!(message.contains("Codex hooks"));
+        assert!(message.contains("process detection only"));
     }
 }

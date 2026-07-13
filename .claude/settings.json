@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "UserPromptSubmit"]
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "PreToolUse"]
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "PostToolUse"]
+      }]
+    }],
+    "Notification": [{
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "Notification"]
+      }]
+    }],
+    "PostToolUseFailure": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "PostToolUseFailure"]
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "D:\\project\\cc-traffic-light\\target\\debug\\taskbar_widget_hook.exe",
+        "args": ["claude", "Stop"]
+      }]
+    }]
+  }
+}

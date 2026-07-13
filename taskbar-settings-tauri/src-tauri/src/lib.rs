@@ -10,7 +10,7 @@ use shared_core::{
     app_config::{changed_keys, config_file_path, default_widget_palette, AppConfig},
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
-        SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand,
+        HookStatusDto, SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand,
         SettingsIpcEnvelope, SettingsIpcResponse, SettingsIpcResponseEnvelope,
         SettingsRefreshResultDto, SettingsSaveResultDto, SettingsTransportDto,
         TAURI_SETTINGS_PIPE_NAME, TAURI_SETTINGS_PROTOCOL_VERSION,
@@ -293,6 +293,45 @@ fn notify_settings_applied(
     )
 }
 
+#[tauri::command]
+fn get_hook_status() -> Result<HookStatusDto, String> {
+    call_or_fake(
+        SettingsIpcCommand::GetHookStatus,
+        |response| match response {
+            SettingsIpcResponse::GetHookStatus { status } => Ok(status),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected get_hook_status response".to_string()),
+        },
+        |_guard| {
+            Ok(HookStatusDto {
+                codex: shared_core::tauri_ipc::HookStatus::NotInstalled,
+                claude: shared_core::tauri_ipc::HookStatus::NotInstalled,
+            })
+        },
+    )
+}
+
+#[tauri::command]
+fn install_codex_hooks() -> Result<String, String> {
+    call_or_fake(
+        SettingsIpcCommand::InstallCodexHooks,
+        |response| match response {
+            SettingsIpcResponse::InstallCodexHooks { success, message } => {
+                if success {
+                    Ok(message)
+                } else {
+                    Err(message)
+                }
+            }
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected install_codex_hooks response".to_string()),
+        },
+        |_guard| {
+            Err("cannot install hooks in fake backend mode".to_string())
+        },
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -302,7 +341,9 @@ pub fn run() {
             get_settings,
             save_settings,
             request_refresh,
-            notify_settings_applied
+            notify_settings_applied,
+            get_hook_status,
+            install_codex_hooks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri settings");

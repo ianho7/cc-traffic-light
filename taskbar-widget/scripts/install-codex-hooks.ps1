@@ -1,12 +1,26 @@
 param(
     [string]$HooksPath = "$env:USERPROFILE\.codex\hooks.json",
-    [string]$HookExecutablePath = "$env:LOCALAPPDATA\CcTrafficLight\bin\taskbar_widget_hook.exe",
+    [string]$HookExecutablePath = "",
+    [string]$WrapperPath = "",
     [switch]$Apply,
     [switch]$Restore,
     [switch]$ShowPaths
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($HookExecutablePath)) {
+    $installedHookPath = Join-Path (Split-Path -Parent $PSScriptRoot) "taskbar_widget_hook.exe"
+    if (Test-Path -LiteralPath $installedHookPath -PathType Leaf) {
+        $HookExecutablePath = $installedHookPath
+    } else {
+        $HookExecutablePath = Join-Path $env:LOCALAPPDATA "Programs\CC Traffic Light\taskbar_widget_hook.exe"
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($WrapperPath)) {
+    $WrapperPath = Join-Path $env:LOCALAPPDATA "CcTrafficLight\codex-taskbar-widget-hook.cmd"
+}
 
 $ManagedStatusPrefix = "CcTrafficLight Codex"
 $BackupSuffix = ".cc-traffic-light-global-hooks.bak"
@@ -37,6 +51,19 @@ function ConvertTo-PrettyJson {
     param($Value)
 
     $Value | ConvertTo-Json -Depth 20
+}
+
+function Write-Utf8NoBom {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Content
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
 }
 
 function Get-PropertyValue {
@@ -132,13 +159,39 @@ function New-CommandString {
     '"' + $ExecutablePath + '" codex ' + $HookName
 }
 
+function New-WindowsCommandString {
+    param(
+        [string]$WrapperPath,
+        [string]$HookName
+    )
+
+    # `call` preserves `%*` forwarding from the wrapper and keeps the actual
+    # hook EXE out of Codex's direct Windows process launch path.
+    'cmd.exe /d /s /c call "' + $WrapperPath + '" codex ' + $HookName
+}
+
+function Write-WindowsHookWrapper {
+    param(
+        [string]$Path,
+        [string]$ExecutablePath
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+
+    $content = "@echo off`r`n`"$ExecutablePath`" %*`r`nexit /b %ERRORLEVEL%`r`n"
+    Write-Utf8NoBom -Path $Path -Content $content
+}
+
 function New-ManagedEntry {
     param($Spec)
 
     $hook = [pscustomobject][ordered]@{
         type = "command"
         command = $Spec.Command
-        commandWindows = $Spec.Command
+        commandWindows = $Spec.CommandWindows
         statusMessage = $Spec.StatusMessage
     }
 
@@ -157,7 +210,10 @@ function New-ManagedEntry {
 }
 
 function Get-DesiredEventSpecs {
-    param([string]$ExecutablePath)
+    param(
+        [string]$ExecutablePath,
+        [string]$WrapperPath
+    )
 
     @(
         [pscustomobject][ordered]@{
@@ -165,42 +221,49 @@ function Get-DesiredEventSpecs {
             Matcher = "startup|resume|clear|compact"
             StatusMessage = "$ManagedStatusPrefix SessionStart"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "SessionStart"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "SessionStart"
         }
         [pscustomobject][ordered]@{
             Event = "UserPromptSubmit"
             Matcher = $null
             StatusMessage = "$ManagedStatusPrefix UserPromptSubmit"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "UserPromptSubmit"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "UserPromptSubmit"
         }
         [pscustomobject][ordered]@{
             Event = "PreToolUse"
             Matcher = "*"
             StatusMessage = "$ManagedStatusPrefix PreToolUse"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "PreToolUse"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "PreToolUse"
         }
         [pscustomobject][ordered]@{
             Event = "PermissionRequest"
             Matcher = "*"
             StatusMessage = "$ManagedStatusPrefix PermissionRequest"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "PermissionRequest"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "PermissionRequest"
         }
         [pscustomobject][ordered]@{
             Event = "PostToolUse"
             Matcher = "*"
             StatusMessage = "$ManagedStatusPrefix PostToolUse"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "PostToolUse"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "PostToolUse"
         }
         [pscustomobject][ordered]@{
             Event = "SubagentStop"
             Matcher = "*"
             StatusMessage = "$ManagedStatusPrefix SubagentStop"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "SubagentStop"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "SubagentStop"
         }
         [pscustomobject][ordered]@{
             Event = "Stop"
             Matcher = $null
             StatusMessage = "$ManagedStatusPrefix Stop"
             Command = New-CommandString -ExecutablePath $ExecutablePath -HookName "Stop"
+            CommandWindows = New-WindowsCommandString -WrapperPath $WrapperPath -HookName "Stop"
         }
     )
 }
@@ -333,7 +396,7 @@ function Write-HooksConfigAtomically {
     }
 
     $tempPath = "$Path.cc-traffic-light.tmp"
-    Set-Content -LiteralPath $tempPath -Value $Content -Encoding UTF8
+    Write-Utf8NoBom -Path $tempPath -Content $Content
 
     if (Test-Path -LiteralPath $Path) {
         Remove-Item -LiteralPath $Path -Force
@@ -359,16 +422,16 @@ function Write-BackupState {
 
     if (-not (Test-Path -LiteralPath $backupPath)) {
         if ($OriginalExisted) {
-            Set-Content -LiteralPath $backupPath -Value $RawText -Encoding UTF8
+            Write-Utf8NoBom -Path $backupPath -Content $RawText
         } else {
-            Set-Content -LiteralPath $backupPath -Value "" -Encoding UTF8
+            Write-Utf8NoBom -Path $backupPath -Content ""
         }
     }
 
     $meta = [pscustomobject][ordered]@{
         originalExisted = $OriginalExisted
     }
-    Set-Content -LiteralPath $backupMetaPath -Value (ConvertTo-PrettyJson $meta) -Encoding UTF8
+    Write-Utf8NoBom -Path $backupMetaPath -Content (ConvertTo-PrettyJson $meta)
 
     [pscustomobject][ordered]@{
         BackupPath = $backupPath
@@ -430,6 +493,22 @@ function Restore-HooksConfig {
 }
 
 Assert-StableHookExecutablePath -Path $HookExecutablePath
+$hookExecutableExists = Test-Path -LiteralPath $HookExecutablePath -PathType Leaf
+
+if ($Apply -and -not $Restore -and -not $hookExecutableExists) {
+    throw "HookExecutablePath does not point to an existing file: $HookExecutablePath"
+}
+
+if ($Apply -and -not $Restore) {
+    Write-WindowsHookWrapper -Path $WrapperPath -ExecutablePath $HookExecutablePath
+}
+
+if ($Apply -and -not $Restore -and (Test-Path -LiteralPath $HooksPath -PathType Leaf)) {
+    $hooksAttributes = (Get-Item -LiteralPath $HooksPath).Attributes
+    if (($hooksAttributes -band [System.IO.FileAttributes]::ReadOnly) -ne 0) {
+        throw "hooks.json is read-only and was not modified: $HooksPath"
+    }
+}
 
 if ($Restore) {
     ConvertTo-PrettyJson (Restore-HooksConfig -HooksPath $HooksPath)
@@ -437,7 +516,7 @@ if ($Restore) {
 }
 
 $readResult = Read-HooksConfig -Path $HooksPath
-$specs = Get-DesiredEventSpecs -ExecutablePath $HookExecutablePath
+$specs = Get-DesiredEventSpecs -ExecutablePath $HookExecutablePath -WrapperPath $WrapperPath
 $mergeResult = Merge-HooksConfig -HooksConfig $readResult.Config -Specs $specs
 $updatedJson = ConvertTo-PrettyJson $mergeResult.Config
 $backupState = [pscustomobject][ordered]@{
@@ -454,6 +533,8 @@ $summary = [pscustomobject][ordered]@{
     mode = if ($Apply) { "apply" } else { "dry-run" }
     hooks_path = Format-PathForOutput $HooksPath
     hook_executable_path = Format-PathForOutput $HookExecutablePath
+    hook_wrapper_path = Format-PathForOutput $WrapperPath
+    hook_executable_exists = $hookExecutableExists
     backup_path = Format-PathForOutput $backupState.BackupPath
     backup_meta_path = Format-PathForOutput $backupState.BackupMetaPath
     config_existed = $readResult.Exists

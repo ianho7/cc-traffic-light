@@ -87,6 +87,8 @@ pub struct WidgetPaletteConfig {
 pub struct DiagnosticsConfig {
     pub last_opened_page: SettingsPage,
     pub last_manual_refresh_at: Option<u64>,
+    #[serde(default)]
+    pub last_hook_notification_key: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -174,6 +176,7 @@ impl AppConfig {
             diagnostics: DiagnosticsConfig {
                 last_opened_page: SettingsPage::Overview,
                 last_manual_refresh_at: None,
+                last_hook_notification_key: None,
             },
         }
     }

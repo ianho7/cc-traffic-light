@@ -1,0 +1,61 @@
+{
+  "_comment": "项目级 Claude Code 开发配置。command 指向 debug 构建路径的 dump-only wrapper，仅用于 payload 形状采样。release 安装后如有需要可指向稳定路径。",
+  "_release_path_template": "{install_dir}\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1\" -HookName UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1\" -HookName PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1\" -HookName PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1\" -HookName Notification"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:\\project\\cc-traffic-light\\taskbar-widget\\scripts\\claude-lifecycle-hook-dump.ps1\" -HookName PostToolUseFailure"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -171,6 +171,14 @@ fn handle_request(request_bytes: &[u8]) -> SettingsIpcResponseEnvelope {
                     settings_bridge::notify_settings_applied(&applied_keys);
                     SettingsIpcResponse::NotifySettingsApplied { acknowledged: true }
                 }
+                SettingsIpcCommand::GetHookStatus => {
+                    let status = settings_bridge::detect_hook_status();
+                    SettingsIpcResponse::GetHookStatus { status }
+                }
+                SettingsIpcCommand::InstallCodexHooks => {
+                    let (success, message) = settings_bridge::install_codex_hooks();
+                    SettingsIpcResponse::InstallCodexHooks { success, message }
+                }
             };
 
             SettingsIpcResponseEnvelope {
@@ -190,5 +198,3 @@ fn response_error(request_id: String, message: String) -> SettingsIpcResponseEnv
         response: SettingsIpcResponse::Error { message },
     }
 }
-
-

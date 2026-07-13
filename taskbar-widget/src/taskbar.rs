@@ -6,19 +6,19 @@ use windows::{
         Foundation::{COLORREF, HWND, POINT, RECT},
         Graphics::Gdi::{InvalidateRect, ScreenToClient, UpdateWindow},
         UI::WindowsAndMessaging::{
-            FindWindowExW, FindWindowW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetParent,
-            GetClassNameW, GetWindowLongPtrW, HWND_TOP, IsWindowVisible, LWA_ALPHA, MoveWindow,
-            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW,
-            SetWindowPos, WS_BORDER, WS_CAPTION, WS_CHILD, WS_DLGFRAME, WS_EX_LAYERED,
-            WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+            FindWindowExW, FindWindowW, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetClientRect,
+            GetParent, GetWindowLongPtrW, HWND_TOP, IsWindowVisible, LWA_ALPHA, MoveWindow,
+            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+            SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW, SetWindowPos, WS_BORDER,
+            WS_CAPTION, WS_CHILD, WS_DLGFRAME, WS_EX_LAYERED, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+            WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
         },
     },
     core::{PCWSTR, w},
 };
 
-use crate::win32;
 use crate::settings_bridge;
+use crate::win32;
 use taskbar_widget::widget_render;
 
 #[derive(Clone, Copy, Debug)]
@@ -770,7 +770,12 @@ fn adjust_for_occupied_widgets(
 
 fn collect_peer_widget_rects(hwnd: HWND, probe: &TaskbarProbe, parent_rect: &RECT) -> Vec<RECT> {
     let mut rects = Vec::new();
-    let mut roots = vec![probe.shell_tray, probe.rebar, probe.task_switch, probe.host_parent];
+    let mut roots = vec![
+        probe.shell_tray,
+        probe.rebar,
+        probe.task_switch,
+        probe.host_parent,
+    ];
     roots.retain(|root| is_valid_window(*root));
     roots.dedup_by(|a, b| a.0 == b.0);
 
@@ -1177,14 +1182,8 @@ mod tests {
             bottom: 40,
         }];
 
-        let left = adjust_for_occupied_widgets(
-            48,
-            WidgetPlacement::Left,
-            80,
-            8,
-            &parent_rect,
-            &occupied,
-        );
+        let left =
+            adjust_for_occupied_widgets(48, WidgetPlacement::Left, 80, 8, &parent_rect, &occupied);
 
         assert_eq!(left, 124);
     }

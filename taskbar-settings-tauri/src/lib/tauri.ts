@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfig,
+  HookStatusDto,
   SettingsBootstrapDto,
   SettingsRefreshResultDto,
   SettingsSaveResultDto,
@@ -29,4 +30,12 @@ export function requestRefresh(): Promise<SettingsRefreshResultDto> {
 
 export function notifySettingsApplied(appliedKeys: string[]): Promise<void> {
   return invoke("notify_settings_applied", { appliedKeys });
+}
+
+export function getHookStatus(): Promise<HookStatusDto> {
+  return invoke("get_hook_status");
+}
+
+export function installCodexHooks(): Promise<string> {
+  return invoke("install_codex_hooks");
 }

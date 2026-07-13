@@ -43,7 +43,8 @@ pub fn infer_state(hook_name: &str) -> AgentState {
         "sessionstart" => AgentState::Idle,
         "userpromptsubmit" | "pretooluse" | "posttooluse" | "precompact" | "postcompact"
         | "subagentstart" => AgentState::Working,
-        "permissionrequest" | "notification" => AgentState::Waiting,
+        "permissionrequest" => AgentState::Waiting,
+        "notification" => AgentState::Idle,
         "stopfailure" | "posttoolusefailure" | "toolusefailure" => AgentState::Error,
         "subagentstop" | "stop" => AgentState::Done,
         _ => AgentState::Working,
@@ -170,5 +171,10 @@ mod tests {
     #[test]
     fn permission_request_remains_waiting() {
         assert_eq!(infer_state("PermissionRequest"), AgentState::Waiting);
+    }
+
+    #[test]
+    fn notification_does_not_create_a_waiting_state() {
+        assert_eq!(infer_state("Notification"), AgentState::Idle);
     }
 }

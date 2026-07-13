@@ -263,6 +263,7 @@ function App() {
             />
           ) : page === "monitoring" ? (
             <MonitoringPage
+              configPath={about.config_path}
               pending={pending}
               settings={settings}
               snapshot={snapshot}

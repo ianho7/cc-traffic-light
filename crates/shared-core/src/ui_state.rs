@@ -13,6 +13,8 @@ pub enum SourceId {
 
 impl SourceId {
     pub fn parse(value: &str) -> Option<Self> {
+        // `claude` is the canonical wire key; aliases are accepted only for
+        // compatibility with older snapshots and configuration fixtures.
         match value.to_ascii_lowercase().as_str() {
             "codex" => Some(Self::Codex),
             "claude" | "claude_code" | "claudecode" => Some(Self::Claude),

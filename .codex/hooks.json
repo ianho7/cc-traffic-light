@@ -1,4 +1,5 @@
 {
+  "description": "项目级开发配置，command 指向 debug 构建路径。release 安装后全局 hooks 由 install-codex-hooks.ps1 部署到 %USERPROFILE%\\.codex\\hooks.json",
   "hooks": {
     "SessionStart": [
       {

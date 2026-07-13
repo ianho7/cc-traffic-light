@@ -8,8 +8,7 @@ use std::{
 use windows::Win32::{
     Foundation::{BOOL, HWND, LPARAM},
     UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SW_RESTORE, SetForegroundWindow,
-        ShowWindow,
+        EnumWindows, GetWindowThreadProcessId, SW_RESTORE, SetForegroundWindow, ShowWindow,
     },
 };
 
@@ -228,7 +227,10 @@ unsafe extern "system" fn enum_windows_for_process(hwnd: HWND, lparam: LPARAM) -
         let _ = GetWindowThreadProcessId(hwnd, Some(&mut process_id));
     }
 
-    if process_id == context.target_pid && unsafe { IsWindowVisible(hwnd) }.as_bool() {
+    // Tauri can create its top-level HWND before it becomes visible. Treat that
+    // HWND as reusable and let ShowWindow restore it, rather than killing a
+    // healthy process during its startup race.
+    if process_id == context.target_pid {
         context.hwnd = Some(hwnd);
         BOOL(0)
     } else {
