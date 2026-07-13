@@ -4,6 +4,8 @@
 
 This repository is now a mixed Rust plus PNPM workspace for a Win32 taskbar host with a standalone Tauri settings app.
 
+For the maintained source and documentation map, see [FILETREE.md](FILETREE.md).
+
 - `taskbar-widget/` is the native host crate. It owns the widget window, tray, detector loop, fallback settings paths, and the host-side named-pipe server.
 - `taskbar-settings-tauri/` is the React plus Tauri settings application. `src/` holds the frontend UI and `src-tauri/` holds the Rust backend crate.
 - `crates/shared-core/` is the shared Rust business layer for config models, snapshot DTOs, settings services, and IPC contract types.
