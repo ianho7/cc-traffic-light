@@ -332,6 +332,51 @@ fn install_codex_hooks() -> Result<String, String> {
     )
 }
 
+#[tauri::command]
+fn install_claude_hooks() -> Result<String, String> {
+    call_or_fake(
+        SettingsIpcCommand::InstallClaudeHooks,
+        |response| match response {
+            SettingsIpcResponse::InstallClaudeHooks { success, message } => {
+                if success { Ok(message) } else { Err(message) }
+            }
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected install_claude_hooks response".to_string()),
+        },
+        |_guard| Ok("fake Claude hooks deployed".to_string()),
+    )
+}
+
+#[tauri::command]
+fn uninstall_codex_hooks() -> Result<String, String> {
+    call_or_fake(
+        SettingsIpcCommand::UninstallCodexHooks,
+        |response| match response {
+            SettingsIpcResponse::UninstallCodexHooks { success, message } => {
+                if success { Ok(message) } else { Err(message) }
+            }
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected uninstall_codex_hooks response".to_string()),
+        },
+        |_guard| Err("cannot uninstall hooks in fake backend mode".to_string()),
+    )
+}
+
+#[tauri::command]
+fn uninstall_claude_hooks() -> Result<String, String> {
+    call_or_fake(
+        SettingsIpcCommand::UninstallClaudeHooks,
+        |response| match response {
+            SettingsIpcResponse::UninstallClaudeHooks { success, message } => {
+                if success { Ok(message) } else { Err(message) }
+            }
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected uninstall_claude_hooks response".to_string()),
+        },
+        |_guard| Err("cannot uninstall hooks in fake backend mode".to_string()),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -343,7 +388,10 @@ pub fn run() {
             request_refresh,
             notify_settings_applied,
             get_hook_status,
-            install_codex_hooks
+            install_codex_hooks,
+            install_claude_hooks,
+            uninstall_codex_hooks,
+            uninstall_claude_hooks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri settings");

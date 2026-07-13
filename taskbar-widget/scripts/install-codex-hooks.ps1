@@ -3,6 +3,7 @@ param(
     [string]$HookExecutablePath = "",
     [string]$WrapperPath = "",
     [switch]$Apply,
+    [switch]$Uninstall,
     [switch]$Restore,
     [switch]$ShowPaths
 )
@@ -372,6 +373,34 @@ function Merge-HooksConfig {
     }
 }
 
+function Remove-ManagedHooks {
+    param(
+        $HooksConfig,
+        [object[]]$Specs
+    )
+
+    $eventSummaries = @()
+    foreach ($spec in $Specs) {
+        $existingEntries = Get-EventEntries -HooksConfig $HooksConfig -EventName $spec.Event
+        $managedEntries = @($existingEntries | Where-Object { Test-IsManagedEntry -Entry $_ -Spec $spec })
+        $otherEntries = @($existingEntries | Where-Object { -not (Test-IsManagedEntry -Entry $_ -Spec $spec) })
+        if ($managedEntries.Count -gt 0) {
+            Set-EventEntries -HooksConfig $HooksConfig -EventName $spec.Event -Entries $otherEntries
+        }
+        $eventSummaries += [pscustomobject][ordered]@{
+            event = $spec.Event
+            removed = $managedEntries.Count
+            other_entries = $otherEntries.Count
+        }
+    }
+
+    [pscustomobject][ordered]@{
+        Config = $HooksConfig
+        EventSummaries = $eventSummaries
+        RemovedCount = @($eventSummaries | ForEach-Object { $_.removed } | Measure-Object -Sum).Sum
+    }
+}
+
 function Assert-StableHookExecutablePath {
     param([string]$Path)
 
@@ -495,11 +524,11 @@ function Restore-HooksConfig {
 Assert-StableHookExecutablePath -Path $HookExecutablePath
 $hookExecutableExists = Test-Path -LiteralPath $HookExecutablePath -PathType Leaf
 
-if ($Apply -and -not $Restore -and -not $hookExecutableExists) {
+if ($Apply -and -not $Restore -and -not $Uninstall -and -not $hookExecutableExists) {
     throw "HookExecutablePath does not point to an existing file: $HookExecutablePath"
 }
 
-if ($Apply -and -not $Restore) {
+if ($Apply -and -not $Restore -and -not $Uninstall) {
     Write-WindowsHookWrapper -Path $WrapperPath -ExecutablePath $HookExecutablePath
 }
 
@@ -517,6 +546,20 @@ if ($Restore) {
 
 $readResult = Read-HooksConfig -Path $HooksPath
 $specs = Get-DesiredEventSpecs -ExecutablePath $HookExecutablePath -WrapperPath $WrapperPath
+if ($Uninstall) {
+    $removeResult = Remove-ManagedHooks -HooksConfig $readResult.Config -Specs $specs
+    if ($Apply -and $readResult.Exists -and $removeResult.RemovedCount -gt 0) {
+        Write-HooksConfigAtomically -Path $HooksPath -Content (ConvertTo-PrettyJson $removeResult.Config)
+    }
+    [pscustomobject][ordered]@{
+        mode = if ($Apply) { "uninstall" } else { "uninstall-dry-run" }
+        hooks_path = Format-PathForOutput $HooksPath
+        written = ($Apply.IsPresent -and $readResult.Exists -and $removeResult.RemovedCount -gt 0)
+        removed_count = $removeResult.RemovedCount
+        event_summary = $removeResult.EventSummaries
+    } | ConvertTo-PrettyJson
+    exit 0
+}
 $mergeResult = Merge-HooksConfig -HooksConfig $readResult.Config -Specs $specs
 $updatedJson = ConvertTo-PrettyJson $mergeResult.Config
 $backupState = [pscustomobject][ordered]@{

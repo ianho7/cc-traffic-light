@@ -94,6 +94,12 @@ pub enum SettingsIpcCommand {
     GetHookStatus,
     #[serde(rename = "install_codex_hooks")]
     InstallCodexHooks,
+    #[serde(rename = "install_claude_hooks")]
+    InstallClaudeHooks,
+    #[serde(rename = "uninstall_codex_hooks")]
+    UninstallCodexHooks,
+    #[serde(rename = "uninstall_claude_hooks")]
+    UninstallClaudeHooks,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -119,6 +125,12 @@ pub enum SettingsIpcResponse {
     GetHookStatus { status: HookStatusDto },
     #[serde(rename = "install_codex_hooks")]
     InstallCodexHooks { success: bool, message: String },
+    #[serde(rename = "install_claude_hooks")]
+    InstallClaudeHooks { success: bool, message: String },
+    #[serde(rename = "uninstall_codex_hooks")]
+    UninstallCodexHooks { success: bool, message: String },
+    #[serde(rename = "uninstall_claude_hooks")]
+    UninstallClaudeHooks { success: bool, message: String },
     #[serde(rename = "error")]
     Error { message: String },
 }

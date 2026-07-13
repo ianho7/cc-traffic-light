@@ -39,3 +39,15 @@ export function getHookStatus(): Promise<HookStatusDto> {
 export function installCodexHooks(): Promise<string> {
   return invoke("install_codex_hooks");
 }
+
+export function installClaudeHooks(): Promise<string> {
+  return invoke("install_claude_hooks");
+}
+
+export function uninstallCodexHooks(): Promise<string> {
+  return invoke("uninstall_codex_hooks");
+}
+
+export function uninstallClaudeHooks(): Promise<string> {
+  return invoke("uninstall_claude_hooks");
+}

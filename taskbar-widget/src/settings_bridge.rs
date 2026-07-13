@@ -8,7 +8,7 @@ use shared_core::{
 use taskbar_widget::{
     agent_state,
     app_config::{self, AppConfig},
-    ui_state::AppStatusSnapshot,
+    ui_state::{AppStatusSnapshot, SourceId},
 };
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
@@ -375,7 +375,7 @@ fn detect_agent_hook_status(agent: &str) -> HookStatus {
 }
 
 fn classify_hook_status(
-    agent: &str,
+    _agent: &str,
     hooks_installed: bool,
     state_recent: bool,
     has_error: bool,
@@ -387,7 +387,7 @@ fn classify_hook_status(
     match (hooks_installed, state_recent) {
         (true, true) => HookStatus::Active,
         (true, false) => HookStatus::ConfiguredUnverified,
-        (false, false) if agent == "claude" => HookStatus::ProcessOnly,
+        (false, false) => HookStatus::NotInstalled,
         _ => HookStatus::NotInstalled,
     }
 }
@@ -403,7 +403,23 @@ fn state_has_recent_activity(value: &serde_json::Value, agent: &str, now_ms: u64
 
 /// Run install-codex-hooks.ps1 to deploy global Codex hooks.
 pub fn install_codex_hooks() -> (bool, String) {
-    let script_path = get_install_script_path();
+    install_hooks("codex")
+}
+
+pub fn install_claude_hooks() -> (bool, String) {
+    install_hooks("claude")
+}
+
+pub fn uninstall_codex_hooks() -> (bool, String) {
+    uninstall_hooks("codex", SourceId::Codex)
+}
+
+pub fn uninstall_claude_hooks() -> (bool, String) {
+    uninstall_hooks("claude", SourceId::Claude)
+}
+
+fn install_hooks(agent: &str) -> (bool, String) {
+    let script_path = get_install_script_path(agent);
     if !script_path.exists() {
         return (
             false,
@@ -446,14 +462,59 @@ pub fn install_codex_hooks() -> (bool, String) {
                 )
             }
         }
-        Err(error) => (false, format!("failed to start powershell: {error}")),
+        Err(error) => (
+            false,
+            format!("failed to start {agent} hook installer: {error}"),
+        ),
     }
 }
 
-fn get_install_script_path() -> std::path::PathBuf {
+fn uninstall_hooks(agent: &str, source_id: SourceId) -> (bool, String) {
+    let script_path = get_install_script_path(agent);
+    if !script_path.exists() {
+        return (
+            false,
+            format!("install script not found: {}", script_path.display()),
+        );
+    }
+
+    match std::process::Command::new("powershell.exe")
+        .args([
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &script_path.to_string_lossy(),
+            "-Uninstall",
+            "-Apply",
+        ])
+        .output()
+    {
+        Ok(output) if output.status.success() => match agent_state::clear_agent_tasks(source_id) {
+            Ok(_) => (true, format!("{agent} hooks removed and historical state cleared")),
+            Err(error) => (
+                false,
+                format!("{agent} hooks removed, but state cleanup failed: {error}"),
+            ),
+        },
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let detail = if stderr.trim().is_empty() {
+                stdout.trim()
+            } else {
+                stderr.trim()
+            };
+            (false, format!("{agent} hook removal failed (exit={}): {detail}", output.status))
+        }
+        Err(error) => (false, format!("failed to start {agent} hook uninstaller: {error}")),
+    }
+}
+
+fn get_install_script_path(agent: &str) -> std::path::PathBuf {
+    let script_name = format!("install-{agent}-hooks.ps1");
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            let local = exe_dir.join("scripts").join("install-codex-hooks.ps1");
+            let local = exe_dir.join("scripts").join(&script_name);
             if local.exists() {
                 return local;
             }
@@ -466,11 +527,11 @@ fn get_install_script_path() -> std::path::PathBuf {
                 "Programs",
                 "CC Traffic Light",
                 "scripts",
-                "install-codex-hooks.ps1",
             ]);
+            path.push(&script_name);
             path
         })
-        .unwrap_or_else(|| std::path::PathBuf::from("install-codex-hooks.ps1"))
+        .unwrap_or_else(|| std::path::PathBuf::from(script_name))
 }
 
 #[cfg(test)]
@@ -527,10 +588,10 @@ mod tests {
     }
 
     #[test]
-    fn classifies_unconfigured_claude_as_process_only() {
+    fn classifies_unconfigured_claude_as_not_installed() {
         assert_eq!(
             classify_hook_status("claude", false, false, false),
-            HookStatus::ProcessOnly
+            HookStatus::NotInstalled
         );
     }
 

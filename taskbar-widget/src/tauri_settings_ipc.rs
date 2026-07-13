@@ -179,6 +179,18 @@ fn handle_request(request_bytes: &[u8]) -> SettingsIpcResponseEnvelope {
                     let (success, message) = settings_bridge::install_codex_hooks();
                     SettingsIpcResponse::InstallCodexHooks { success, message }
                 }
+                SettingsIpcCommand::InstallClaudeHooks => {
+                    let (success, message) = settings_bridge::install_claude_hooks();
+                    SettingsIpcResponse::InstallClaudeHooks { success, message }
+                }
+                SettingsIpcCommand::UninstallCodexHooks => {
+                    let (success, message) = settings_bridge::uninstall_codex_hooks();
+                    SettingsIpcResponse::UninstallCodexHooks { success, message }
+                }
+                SettingsIpcCommand::UninstallClaudeHooks => {
+                    let (success, message) = settings_bridge::uninstall_claude_hooks();
+                    SettingsIpcResponse::UninstallClaudeHooks { success, message }
+                }
             };
 
             SettingsIpcResponseEnvelope {

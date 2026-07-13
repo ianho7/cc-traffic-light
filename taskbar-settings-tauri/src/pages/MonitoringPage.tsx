@@ -3,7 +3,15 @@ import type { AppConfig, HookStatusDto, StatusSnapshotView } from "../types";
 import SourceNodeGrid from "../components/source/SourceNodeGrid";
 import SourceNodeCard from "../components/source/SourceNodeCard";
 import { formatTimestamp, sourceLabel, stateLabel } from "../lib/label-lookup";
-import { getHookStatus, getSnapshot, installCodexHooks, requestRefresh } from "../lib/tauri";
+import {
+  getHookStatus,
+  getSnapshot,
+  installClaudeHooks,
+  installCodexHooks,
+  requestRefresh,
+  uninstallClaudeHooks,
+  uninstallCodexHooks
+} from "../lib/tauri";
 
 interface MonitoringPageProps {
   settings: AppConfig;
@@ -25,7 +33,7 @@ function hookStatusLabel(status: string): string {
   switch (status) {
     case "active": return "✅ 已就绪";
     case "configured_unverified": return "⏳ 已配置但尚未验证触发（请在终端运行 /hooks trust）";
-    case "process_only": return "⚪ 仅进程检测（无法判断工作状态）";
+    case "process_only": return "❌ 未安装";
     case "error": return "❌ 配置或状态损坏";
     default: return "❌ 未安装";
   }
@@ -50,7 +58,7 @@ export default function MonitoringPage({
 }: MonitoringPageProps) {
   const [hookStatus, setHookStatus] = useState<HookStatusDto | null>(null);
   const [displaySnapshot, setDisplaySnapshot] = useState(snapshot);
-  const [deploying, setDeploying] = useState(false);
+  const [deployingAgent, setDeployingAgent] = useState<"codex" | "claude" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [deployMessage, setDeployMessage] = useState<string | null>(null);
 
@@ -64,19 +72,41 @@ export default function MonitoringPage({
       .catch(() => setHookStatus(null));
   }, []);
 
-  const handleDeployHooks = async () => {
-    setDeploying(true);
+  const handleReinstallHooks = async (agent: "codex" | "claude") => {
+    setDeployingAgent(agent);
     setDeployMessage(null);
     try {
-      const message = await installCodexHooks();
-      setDeployMessage(message);
+      await (agent === "codex" ? uninstallCodexHooks() : uninstallClaudeHooks());
+      const message = await (agent === "codex" ? installCodexHooks() : installClaudeHooks());
+      setDeployMessage(`已重新安装：${message}`);
       // Refresh status after deployment
       const status = await getHookStatus();
       setHookStatus(status);
     } catch (error) {
       setDeployMessage(`部署失败: ${error}`);
     } finally {
-      setDeploying(false);
+      setDeployingAgent(null);
+    }
+  };
+
+  const handleUninstallHooks = async (agent: "codex" | "claude") => {
+    const sourceName = agent === "codex" ? "Codex" : "Claude Code";
+    if (!window.confirm(`确定卸载 ${sourceName} 的 CC Traffic Light 监控吗？\n\n仅移除本软件注入的 hooks，保留你的其他配置和 hooks。该来源的历史监控状态也会被清除。`)) {
+      return;
+    }
+
+    setDeployingAgent(agent);
+    setDeployMessage(null);
+    try {
+      const message = await (agent === "codex" ? uninstallCodexHooks() : uninstallClaudeHooks());
+      setDeployMessage(message);
+      const [nextSnapshot, nextHookStatus] = await Promise.all([getSnapshot(), getHookStatus()]);
+      setDisplaySnapshot(nextSnapshot);
+      setHookStatus(nextHookStatus);
+    } catch (error) {
+      setDeployMessage(`卸载失败: ${error}`);
+    } finally {
+      setDeployingAgent(null);
     }
   };
 
@@ -164,26 +194,33 @@ export default function MonitoringPage({
           </p>
         )}
 
-        <button
-          onClick={handleDeployHooks}
-          disabled={deploying}
-          style={{
-            padding: "8px 16px",
-            fontSize: "13px",
-            border: "1px solid var(--border)",
-            borderRadius: "6px",
-            background: "var(--button-bg)",
-            color: "var(--text)",
-            cursor: deploying ? "not-allowed" : "pointer",
-            opacity: deploying ? 0.6 : 1,
-          }}
-        >
-          {deploying ? "部署中..." : "重新部署 Codex hooks"}
-        </button>
+        {(["codex", "claude"] as const).map((agent) => {
+          const sourceName = agent === "codex" ? "Codex" : "Claude Code";
+          const busy = deployingAgent === agent;
+          return (
+            <div key={agent} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px" }}>
+              <strong style={{ width: "92px", fontSize: "13px" }}>{sourceName}</strong>
+              <button
+                onClick={() => void handleUninstallHooks(agent)}
+                disabled={deployingAgent !== null}
+                style={{ padding: "8px 12px", fontSize: "13px", border: "1px solid var(--border)", borderRadius: "6px", background: "transparent", color: "var(--text)", cursor: deployingAgent !== null ? "not-allowed" : "pointer", opacity: deployingAgent !== null ? 0.6 : 1 }}
+              >
+                {busy ? "处理中..." : "卸载监控"}
+              </button>
+              <button
+                onClick={() => void handleReinstallHooks(agent)}
+                disabled={deployingAgent !== null}
+                style={{ padding: "8px 12px", fontSize: "13px", border: "1px solid var(--border)", borderRadius: "6px", background: "var(--button-bg)", color: "var(--text)", cursor: deployingAgent !== null ? "not-allowed" : "pointer", opacity: deployingAgent !== null ? 0.6 : 1 }}
+              >
+                {busy ? "处理中..." : "重新安装监控"}
+              </button>
+            </div>
+          );
+        })}
 
         <button
           onClick={handleRefresh}
-          disabled={refreshing || deploying}
+          disabled={refreshing || deployingAgent !== null}
           style={{
             marginLeft: "8px",
             padding: "8px 16px",
@@ -192,8 +229,8 @@ export default function MonitoringPage({
             borderRadius: "6px",
             background: "transparent",
             color: "var(--text)",
-            cursor: refreshing || deploying ? "not-allowed" : "pointer",
-            opacity: refreshing || deploying ? 0.6 : 1,
+            cursor: refreshing || deployingAgent !== null ? "not-allowed" : "pointer",
+            opacity: refreshing || deployingAgent !== null ? 0.6 : 1,
           }}
         >
           {refreshing ? "刷新中..." : "立即刷新检测"}
@@ -205,7 +242,7 @@ export default function MonitoringPage({
           </p>
         )}
         <p style={{ marginTop: "8px", fontSize: "12px", color: "var(--muted)" }}>
-          Claude Code 当前为仅进程检测模式；command hooks 尚未作为稳定生产能力部署。
+          监控仅依赖 CC Traffic Light hooks；卸载只删除本软件管理的条目，不会删除 Claude Code、Codex 或你的其他配置。
         </p>
       </div>
 

@@ -319,6 +319,16 @@ pub fn debug_clear_task(task_key: &str) -> io::Result<HookMonitorState> {
     })
 }
 
+pub fn clear_agent_tasks(agent: SourceId) -> io::Result<HookMonitorState> {
+    update_state(|state| {
+        remove_tasks_for_agent(state, agent);
+    })
+}
+
+fn remove_tasks_for_agent(state: &mut HookMonitorState, agent: SourceId) {
+    state.tasks.retain(|_, task| task.agent != agent);
+}
+
 pub fn task_key(agent_name: &str, session_id: Option<&str>) -> String {
     match session_id.filter(|value| !value.trim().is_empty()) {
         Some(session_id) => format!("{}_{}", agent_name, safe_key_part(session_id)),
@@ -484,6 +494,40 @@ fn sanitize_message(value: &str) -> String {
         .filter(|ch| !ch.is_control())
         .take(MAX_MESSAGE_CHARS)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(agent: SourceId, key: &str) -> TaskStatus {
+        TaskStatus {
+            agent,
+            task_key: key.to_string(),
+            session_id: key.to_string(),
+            session_id_source: "test".to_string(),
+            state: AgentState::Working,
+            updated_at: 10,
+            event_order: 10,
+            event_order_source: "test".to_string(),
+            hook_name: "PreToolUse".to_string(),
+            message: None,
+            summary_eligible: true,
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn removing_claude_tasks_preserves_codex_tasks() {
+        let mut state = HookMonitorState::default_at(10);
+        state.tasks.insert("codex_a".to_string(), task(SourceId::Codex, "codex_a"));
+        state.tasks.insert("claude_b".to_string(), task(SourceId::Claude, "claude_b"));
+
+        remove_tasks_for_agent(&mut state, SourceId::Claude);
+
+        assert!(state.tasks.contains_key("codex_a"));
+        assert!(!state.tasks.contains_key("claude_b"));
+    }
 }
 
 struct StateMutexGuard {

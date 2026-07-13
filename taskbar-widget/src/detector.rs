@@ -8,9 +8,6 @@ use crate::{
         SourceVisualState, WidgetMountState, hook_visual_state_from_agent_state,
     },
 };
-use windows::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceObservation {
@@ -77,10 +74,6 @@ fn collect_source_observations(
                 summary,
             ));
         }
-    }
-
-    if let Some(observation) = process_fallback_observation(source_id) {
-        observations.push(observation);
     }
 
     observations
@@ -218,70 +211,6 @@ fn confidence_from_hook_summary(summary: &HookSummary) -> SourceConfidence {
     }
 }
 
-fn process_fallback_observation(source_id: SourceId) -> Option<SourceObservation> {
-    if !is_process_present(source_id) {
-        return None;
-    }
-
-    Some(SourceObservation {
-        source_id,
-        kind: DetectionMethod::Process,
-        state: SourceVisualState::Idle,
-        confidence: SourceConfidence::Degraded,
-        updated_at: crate::agent_state::now_ms(),
-        message: Some("process_present_only".to_string()),
-    })
-}
-
-fn is_process_present(source_id: SourceId) -> bool {
-    let Ok(snapshot) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else {
-        return false;
-    };
-
-    let mut entry = PROCESSENTRY32W {
-        dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
-        ..Default::default()
-    };
-
-    let mut found = false;
-    unsafe {
-        if Process32FirstW(snapshot, &mut entry).is_ok() {
-            loop {
-                let process_name = utf16_to_string(&entry.szExeFile);
-                if process_name_matches(source_id, &process_name) {
-                    found = true;
-                    break;
-                }
-
-                if Process32NextW(snapshot, &mut entry).is_err() {
-                    break;
-                }
-            }
-        }
-        let _ = windows::Win32::Foundation::CloseHandle(snapshot);
-    }
-
-    found
-}
-
-fn process_name_matches(source_id: SourceId, process_name: &str) -> bool {
-    let normalized = process_name.trim_end_matches('\0').to_ascii_lowercase();
-    let normalized = normalized.strip_suffix(".exe").unwrap_or(&normalized);
-
-    match source_id {
-        SourceId::Codex => matches!(normalized, "codex"),
-        SourceId::Claude => matches!(normalized, "claude" | "claude-code" | "claudecode"),
-    }
-}
-
-fn utf16_to_string(value: &[u16]) -> String {
-    let end = value
-        .iter()
-        .position(|code_unit| *code_unit == 0)
-        .unwrap_or(value.len());
-    String::from_utf16_lossy(&value[..end])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn state_file_observation_wins_over_process_fallback() {
+    fn higher_priority_observation_wins_over_lower_priority_observation() {
         let result = aggregate_source_status(
             SourceId::Codex,
             vec![
