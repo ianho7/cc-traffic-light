@@ -148,7 +148,7 @@ export default function MonitoringPage({
             disabled={pending}
             enabled={source.enabled}
             key={source.id}
-            name={source.name === source.id ? source.id.toUpperCase() : source.name.toUpperCase()}
+            name={source.name === source.id ? source.id : source.name}
             onToggle={source.onToggle}
             statusTone={statusTone(source.state)}
           />

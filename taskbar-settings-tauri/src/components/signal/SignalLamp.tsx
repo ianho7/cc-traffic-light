@@ -4,6 +4,7 @@ interface SignalLampProps {
   tone: LampTone;
   active?: boolean;
   glow?: boolean;
+  size?: number;
 }
 
 const LAMP_COLORS: Record<LampTone, string> = {
@@ -13,8 +14,8 @@ const LAMP_COLORS: Record<LampTone, string> = {
   idle: "#333"
 };
 
-/** Single traffic-light lamp: 58px circle */
-export default function SignalLamp({ tone, active = false, glow }: SignalLampProps) {
+/** Single traffic-light lamp with a configurable diameter. */
+export default function SignalLamp({ tone, active = false, glow, size = 58 }: SignalLampProps) {
   const color = active ? LAMP_COLORS[tone] : "#333";
   const boxShadow = active && (glow ?? tone === "green")
     ? `0 0 30px ${color}66`
@@ -24,8 +25,8 @@ export default function SignalLamp({ tone, active = false, glow }: SignalLampPro
     <i
       className="signal-lamp"
       style={{
-        width: 58,
-        height: 58,
+        width: size,
+        height: size,
         borderRadius: "50%",
         background: color,
         boxShadow,

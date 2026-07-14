@@ -40,7 +40,7 @@ export function ColorPicker({ value, onChange, onClose, anchorRef }: ColorPicker
   const commitHex = (raw: string) => {
     const cleaned = raw.replace(/^#/, "");
     if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
-      const hex = `#${cleaned.toUpperCase()}`;
+      const hex = `#${cleaned}`;
       setHexDraft(hex);
       onChange(hex);
     } else {
@@ -85,7 +85,7 @@ export function ColorPicker({ value, onChange, onClose, anchorRef }: ColorPicker
             type="color"
             value={hexDraft}
             onChange={(e) => {
-              const next = e.currentTarget.value.toUpperCase();
+              const next = e.currentTarget.value;
               setHexDraft(next);
               onChange(next);
             }}

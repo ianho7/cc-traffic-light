@@ -29,7 +29,7 @@
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
   letter-spacing: 0.16em;
   color: #888;
-  text-transform: uppercase;
+  /* text-transform: uppercase; */
 }
 
 /* ── Sub Text ── */
@@ -177,9 +177,17 @@
   line-height: 1.5;
 }
 
-.hook-management-feedback--success { border-left-color: var(--green, #34c759); }
-.hook-management-feedback--error { border-left-color: var(--red, #ff3b30); }
-.hook-management-panel__note { padding: 12px 16px 16px; }
+.hook-management-feedback--success {
+  border-left-color: var(--green, #34c759);
+}
+
+.hook-management-feedback--error {
+  border-left-color: var(--red, #ff3b30);
+}
+
+.hook-management-panel__note {
+  padding: 12px 16px 16px;
+}
 
 /* ── Monitoring Diagnostics ── */
 .monitoring-diagnostics-panel {
@@ -214,7 +222,7 @@
   border-bottom: 1px solid var(--line, #deded8);
 }
 
-.monitoring-diagnostics-summary > div {
+.monitoring-diagnostics-summary>div {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -222,16 +230,16 @@
   border-bottom: 1px solid var(--line, #deded8);
 }
 
-.monitoring-diagnostics-summary > div:nth-last-child(-n + 2) {
+.monitoring-diagnostics-summary>div:nth-last-child(-n + 2) {
   border-bottom: 0;
 }
 
-.monitoring-diagnostics-summary > div:nth-child(odd) {
+.monitoring-diagnostics-summary>div:nth-child(odd) {
   border-right: 1px solid var(--line, #deded8);
 }
 
 .monitoring-diagnostics-summary span,
-.monitoring-path-row > span:first-child {
+.monitoring-path-row>span:first-child {
   color: var(--muted, #777);
   font: 700 10px var(--mono, ui-monospace, Consolas, monospace);
   letter-spacing: 0.08em;
@@ -251,7 +259,9 @@
   border-bottom: 1px solid var(--line, #deded8);
 }
 
-.monitoring-diagnostics-section:last-child { border-bottom: 0; }
+.monitoring-diagnostics-section:last-child {
+  border-bottom: 0;
+}
 
 .monitoring-diagnostics-section h3 {
   margin: 0 0 10px;
@@ -267,9 +277,19 @@
   gap: 8px;
 }
 
-.monitoring-path-group + .monitoring-path-group { margin-top: 16px; }
-.monitoring-path-group > strong { display: block; margin-bottom: 8px; font-size: 13px; }
-.monitoring-path-group__rows { border: 1px solid var(--line, #deded8); }
+.monitoring-path-group+.monitoring-path-group {
+  margin-top: 16px;
+}
+
+.monitoring-path-group>strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.monitoring-path-group__rows {
+  border: 1px solid var(--line, #deded8);
+}
 
 .monitoring-path-row {
   display: grid;
@@ -280,7 +300,10 @@
   border-bottom: 1px solid var(--line, #deded8);
 }
 
-.monitoring-path-row:last-child { border-bottom: 0; }
+.monitoring-path-row:last-child {
+  border-bottom: 0;
+}
+
 .monitoring-path-row code {
   overflow: hidden;
   color: var(--ink, #151515);
@@ -289,9 +312,20 @@
   white-space: nowrap;
 }
 
-.monitoring-path-row__availability { min-width: 0; color: var(--green, #34c759); font-size: 11px; }
-.monitoring-path-row__availability--unavailable { color: #b42318; }
-.monitoring-path-group__missing { color: var(--muted, #777); font-size: 12px; }
+.monitoring-path-row__availability {
+  min-width: 0;
+  color: var(--green, #34c759);
+  font-size: 11px;
+}
+
+.monitoring-path-row__availability--unavailable {
+  color: #b42318;
+}
+
+.monitoring-path-group__missing {
+  color: var(--muted, #777);
+  font-size: 12px;
+}
 
 /* ── Hook Action Dialog ── */
 .hook-dialog-overlay {
@@ -332,37 +366,112 @@
   line-height: 1.6;
 }
 
-.hook-dialog__actions { margin-top: 24px; }
+.hook-dialog__actions {
+  margin-top: 24px;
+}
 
-@keyframes hook-overlay-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes hook-dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes hook-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hook-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 @media (max-width: 760px) {
+
   .hook-management-panel__header,
   .hook-management-row {
     display: grid;
   }
 
-  .hook-management-panel__header { gap: 12px; }
-  .hook-management-panel__header .action-button { justify-self: start; }
-  .monitoring-diagnostics-panel__header { display: grid; gap: 12px; }
-  .monitoring-diagnostics-panel__actions { justify-content: flex-start; }
-  .hook-management-row { grid-template-columns: 1fr auto; gap: 10px 12px; }
-  .hook-management-row__description { grid-column: 1 / -1; }
-  .hook-management-row__actions { grid-column: 1 / -1; justify-content: stretch; }
-  .hook-management-row__actions .action-button { flex: 1 1 0; }
-  .monitoring-diagnostics-summary { grid-template-columns: 1fr; }
-  .monitoring-diagnostics-summary > div,
-  .monitoring-diagnostics-summary > div:nth-last-child(-n + 2) { border-bottom: 1px solid var(--line, #deded8); }
-  .monitoring-diagnostics-summary > div:last-child { border-bottom: 0; }
-  .monitoring-diagnostics-summary > div:nth-child(odd) { border-right: 0; }
-  .monitoring-path-row { grid-template-columns: 1fr auto; }
-  .monitoring-path-row code { grid-column: 1 / -1; }
-  .monitoring-path-row__availability { justify-self: start; }
+  .hook-management-panel__header {
+    gap: 12px;
+  }
+
+  .hook-management-panel__header .action-button {
+    justify-self: start;
+  }
+
+  .monitoring-diagnostics-panel__header {
+    display: grid;
+    gap: 12px;
+  }
+
+  .monitoring-diagnostics-panel__actions {
+    justify-content: flex-start;
+  }
+
+  .hook-management-row {
+    grid-template-columns: 1fr auto;
+    gap: 10px 12px;
+  }
+
+  .hook-management-row__description {
+    grid-column: 1 / -1;
+  }
+
+  .hook-management-row__actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .hook-management-row__actions .action-button {
+    flex: 1 1 0;
+  }
+
+  .monitoring-diagnostics-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .monitoring-diagnostics-summary>div,
+  .monitoring-diagnostics-summary>div:nth-last-child(-n + 2) {
+    border-bottom: 1px solid var(--line, #deded8);
+  }
+
+  .monitoring-diagnostics-summary>div:last-child {
+    border-bottom: 0;
+  }
+
+  .monitoring-diagnostics-summary>div:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .monitoring-path-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .monitoring-path-row code {
+    grid-column: 1 / -1;
+  }
+
+  .monitoring-path-row__availability {
+    justify-self: start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .hook-dialog-overlay,
-  .hook-dialog { animation: none; }
-  .action-button:active:not(:disabled) { transform: none; }
+  .hook-dialog {
+    animation: none;
+  }
+
+  .action-button:active:not(:disabled) {
+    transform: none;
+  }
 }

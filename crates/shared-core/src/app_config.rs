@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE_NAME: &str = "config.json";
 const CONFIG_SCHEMA_VERSION: u32 = 5;
+pub const MATERIAL_DISPLAY_SIZE_MIN_PX: u8 = 16;
+pub const MATERIAL_DISPLAY_SIZE_MAX_PX: u8 = 32;
+pub const MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT: u8 = 80;
+pub const MATERIAL_BRIGHTNESS_MAX_PERCENT: u8 = 100;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -67,6 +71,14 @@ pub struct WidgetVisualConfig {
     pub codex_material_group_id: Option<String>,
     #[serde(default)]
     pub claude_material_group_id: Option<String>,
+    #[serde(default = "default_material_display_size_px")]
+    pub material_display_size_px: u8,
+    #[serde(default = "default_material_idle_brightness_percent")]
+    pub material_idle_brightness_percent: u8,
+    #[serde(default = "default_material_blink_brightness_percent")]
+    pub material_blink_brightness_percent: u8,
+    #[serde(default = "default_material_steady_brightness_percent")]
+    pub material_steady_brightness_percent: u8,
 }
 
 /// A user-created replacement for the built-in green/yellow/red lamp set.
@@ -241,6 +253,10 @@ impl Default for WidgetVisualConfig {
             material_groups: Vec::new(),
             codex_material_group_id: None,
             claude_material_group_id: None,
+            material_display_size_px: default_material_display_size_px(),
+            material_idle_brightness_percent: default_material_idle_brightness_percent(),
+            material_blink_brightness_percent: default_material_blink_brightness_percent(),
+            material_steady_brightness_percent: default_material_steady_brightness_percent(),
         }
     }
 }
@@ -362,6 +378,22 @@ fn default_widget_inactive_brightness_percent() -> u8 {
     42
 }
 
+pub const fn default_material_display_size_px() -> u8 {
+    MATERIAL_DISPLAY_SIZE_MIN_PX
+}
+
+pub const fn default_material_idle_brightness_percent() -> u8 {
+    42
+}
+
+pub const fn default_material_blink_brightness_percent() -> u8 {
+    MATERIAL_BRIGHTNESS_MAX_PERCENT
+}
+
+pub const fn default_material_steady_brightness_percent() -> u8 {
+    MATERIAL_BRIGHTNESS_MAX_PERCENT
+}
+
 /// Compare two `AppConfig` values and return the list of changed field paths.
 ///
 /// Uses JSON Value comparison so that adding new fields to `AppConfig`
@@ -419,6 +451,28 @@ fn normalize_config(config: &AppConfig) -> AppConfig {
         .palette
         .inactive_brightness_percent
         .clamp(12, 80);
+    config.widget_visual.material_display_size_px = config
+        .widget_visual
+        .material_display_size_px
+        .clamp(MATERIAL_DISPLAY_SIZE_MIN_PX, MATERIAL_DISPLAY_SIZE_MAX_PX);
+    config.widget_visual.material_idle_brightness_percent = config
+        .widget_visual
+        .material_idle_brightness_percent
+        .min(MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT);
+    config.widget_visual.material_blink_brightness_percent = config
+        .widget_visual
+        .material_blink_brightness_percent
+        .clamp(
+            config.widget_visual.material_idle_brightness_percent,
+            MATERIAL_BRIGHTNESS_MAX_PERCENT,
+        );
+    config.widget_visual.material_steady_brightness_percent = config
+        .widget_visual
+        .material_steady_brightness_percent
+        .clamp(
+            config.widget_visual.material_idle_brightness_percent,
+            MATERIAL_BRIGHTNESS_MAX_PERCENT,
+        );
     normalize_material_groups(&mut config.widget_visual);
     config
 }
@@ -547,6 +601,10 @@ mod tests {
         assert_eq!(config.widget_visual.palette.red, "#FF3B30");
         assert_eq!(config.widget_visual.palette.inactive_brightness_percent, 42);
         assert_eq!(config.widget_visual.placement, WidgetPlacement::Right);
+        assert_eq!(
+            config.widget_visual.material_display_size_px,
+            default_material_display_size_px()
+        );
     }
 
     #[test]
@@ -598,6 +656,18 @@ mod tests {
         assert!(normalized.widget_visual.material_groups.is_empty());
         assert_eq!(normalized.widget_visual.codex_material_group_id, None);
         assert_eq!(normalized.widget_visual.claude_material_group_id, None);
+        assert_eq!(
+            normalized.widget_visual.material_idle_brightness_percent,
+            default_material_idle_brightness_percent()
+        );
+        assert_eq!(
+            normalized.widget_visual.material_blink_brightness_percent,
+            default_material_blink_brightness_percent()
+        );
+        assert_eq!(
+            normalized.widget_visual.material_steady_brightness_percent,
+            default_material_steady_brightness_percent()
+        );
     }
 
     #[test]
@@ -642,6 +712,67 @@ mod tests {
         assert_eq!(
             normalized.widget_visual.claude_material_group_id,
             Some("valid".to_string())
+        );
+    }
+
+    #[test]
+    fn material_display_size_defaults_and_is_clamped() {
+        assert_eq!(
+            WidgetVisualConfig::default().material_display_size_px,
+            default_material_display_size_px()
+        );
+
+        let mut config = AppConfig::default_v1();
+        config.widget_visual.material_display_size_px = 1;
+        assert_eq!(
+            normalize_config(&config)
+                .widget_visual
+                .material_display_size_px,
+            MATERIAL_DISPLAY_SIZE_MIN_PX
+        );
+
+        config.widget_visual.material_display_size_px = 100;
+        assert_eq!(
+            normalize_config(&config)
+                .widget_visual
+                .material_display_size_px,
+            MATERIAL_DISPLAY_SIZE_MAX_PX
+        );
+    }
+
+    #[test]
+    fn material_brightness_defaults_and_respects_idle_floor() {
+        let defaults = WidgetVisualConfig::default();
+        assert_eq!(
+            defaults.material_idle_brightness_percent,
+            default_material_idle_brightness_percent()
+        );
+        assert_eq!(
+            defaults.material_blink_brightness_percent,
+            default_material_blink_brightness_percent()
+        );
+        assert_eq!(
+            defaults.material_steady_brightness_percent,
+            default_material_steady_brightness_percent()
+        );
+
+        let mut config = AppConfig::default_v1();
+        config.widget_visual.material_idle_brightness_percent = 100;
+        config.widget_visual.material_blink_brightness_percent = 10;
+        config.widget_visual.material_steady_brightness_percent = 0;
+        let normalized = normalize_config(&config);
+
+        assert_eq!(
+            normalized.widget_visual.material_idle_brightness_percent,
+            MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT
+        );
+        assert_eq!(
+            normalized.widget_visual.material_blink_brightness_percent,
+            MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT
+        );
+        assert_eq!(
+            normalized.widget_visual.material_steady_brightness_percent,
+            MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT
         );
     }
 }

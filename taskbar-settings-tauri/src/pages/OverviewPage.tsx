@@ -21,8 +21,9 @@ function statusTone(value: string): "green" | "yellow" | "red" | "idle" {
 function mapStateToTone(overallState: string): "green" | "yellow" | "red" | "idle" {
   switch (overallState) {
     case "idle": return "green";
-    case "running":
-    case "waiting": return "yellow";
+    case "working":
+    case "completed": return "green";
+    case "needs_attention": return "yellow";
     case "error": return "red";
     default: return "idle";
   }
@@ -52,7 +53,8 @@ export default function OverviewPage({ snapshot, fakeMode, pending }: OverviewPa
         {sourceEntries.map(([key, source]) => (
           <AgentStatusCard
             key={key}
-            name={sourceLabel(key).toUpperCase()}
+            name={sourceLabel(key)}
+            activeTone={statusTone(source.state)}
             stateLabel={stateLabel(source.state)}
           />
         ))}

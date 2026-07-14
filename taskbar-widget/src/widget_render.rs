@@ -21,6 +21,15 @@ pub enum WidgetGroupId {
     Claude,
 }
 
+impl WidgetGroupId {
+    fn source_id(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::Claude => "claude",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WidgetHotZone {
     pub group: WidgetGroupId,
@@ -51,6 +60,7 @@ pub(crate) struct PixelBuffer {
 
 struct GroupLayout {
     id: WidgetGroupId,
+    cell_right: i32,
     logo_left: i32,
     logo_top: i32,
     render_state: GroupRenderState,
@@ -72,6 +82,13 @@ struct Palette {
     yellow: Rgba,
     red: Rgba,
     inactive_brightness_percent: u8,
+}
+
+#[derive(Clone, Copy)]
+struct MaterialBrightness {
+    idle_percent: u8,
+    blink_percent: u8,
+    steady_percent: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -99,30 +116,75 @@ const LAMP_TRACK_WIDTH: i32 = (LAMP_RADIUS * 2.0).ceil() as i32 + LAMP_SPACING *
 /// For fully automatic sizing, use group_width() instead.
 pub const GROUP_WIDTH: i32 = LOGO_EXPECTED_WIDTH + LOGO_GAP + LAMP_TRACK_WIDTH;
 
-/// Compute the actual group width from the decoded logo dimensions at runtime.
-/// This is the content width per group (not including margins).
+/// Compute the actual built-in lamp group width from the decoded logo dimensions.
 pub fn group_width() -> i32 {
     let logo_w = widget_image::get_logo(WidgetGroupId::Codex).width as i32;
     logo_w + LOGO_GAP + LAMP_TRACK_WIDTH
 }
 
-/// Total widget width for a given number of groups, including margins between them.
-pub fn total_widget_width(group_count: usize) -> i32 {
-    let per_group = group_width();
-    let count = group_count.max(1) as i32;
-    if count <= 1 {
-        per_group
-    } else {
-        per_group * count + (count - 1) * GROUP_MARGIN
-    }
-}
 const GROUP_HEIGHT: i32 = 40;
 const LAMP_RADIUS: f32 = 8.0;
 const LAMP_SPACING: i32 = 24;
+const MATERIAL_GAP: i32 = 8;
+const MATERIAL_VERTICAL_PADDING: i32 = 8;
 const LOGO_GAP: i32 = 8; // logo 到第一个灯的间距
 
 /// Horizontal margin (px) between adjacent group cells.
 pub const GROUP_MARGIN: i32 = 20; // 灯组之间的水平外边距（px）
+
+fn visible_group_ids(config: &AppConfig) -> Vec<WidgetGroupId> {
+    let mut ids = Vec::new();
+    if config.monitoring.codex_enabled {
+        ids.push(WidgetGroupId::Codex);
+    }
+    if config.monitoring.claude_enabled {
+        ids.push(WidgetGroupId::Claude);
+    }
+    ids
+}
+
+fn selected_material_group<'a>(
+    config: &'a AppConfig,
+    id: WidgetGroupId,
+) -> Option<&'a crate::app_config::MaterialGroup> {
+    let selected_id = match id {
+        WidgetGroupId::Codex => config.widget_visual.codex_material_group_id.as_deref(),
+        WidgetGroupId::Claude => config.widget_visual.claude_material_group_id.as_deref(),
+    }?;
+    config
+        .widget_visual
+        .material_groups
+        .iter()
+        .find(|group| group.id == selected_id)
+}
+
+fn effective_material_size(config: &AppConfig, height: i32) -> u32 {
+    let available = (height - MATERIAL_VERTICAL_PADDING).max(1) as u32;
+    u32::from(config.widget_visual.material_display_size_px).min(available)
+}
+
+fn group_track_width(config: &AppConfig, id: WidgetGroupId, height: i32) -> i32 {
+    if selected_material_group(config, id).is_some() {
+        let size = effective_material_size(config, height) as i32;
+        size * 3 + MATERIAL_GAP * 2
+    } else {
+        LAMP_TRACK_WIDTH
+    }
+}
+
+fn group_width_for(config: &AppConfig, id: WidgetGroupId, height: i32) -> i32 {
+    widget_image::get_logo(id).width as i32 + LOGO_GAP + group_track_width(config, id, height)
+}
+
+/// Total widget width for the enabled sources, including margins between groups.
+pub fn total_widget_width(config: &AppConfig, height: i32) -> i32 {
+    let group_ids = visible_group_ids(config);
+    group_ids
+        .iter()
+        .map(|id| group_width_for(config, *id, height))
+        .sum::<i32>()
+        + GROUP_MARGIN * (group_ids.len().saturating_sub(1) as i32)
+}
 
 /// Width of the vertical divider line, in pixels.
 const DIVIDER_WIDTH: i32 = 3; // 分隔线的宽度（px）
@@ -179,25 +241,22 @@ pub fn build_widget_frame(
     let height = (rect.bottom - rect.top).max(0);
     let mut buffer = PixelBuffer::new(width, height);
     let palette = Palette::from_config(&config.widget_visual.palette);
+    let material_brightness = MaterialBrightness::from_config(config);
     let groups = build_group_layouts(snapshot, effects, now_ms, config, width, height);
 
     for group in &groups {
-        draw_group(&mut buffer, group, palette);
+        draw_group(&mut buffer, group, palette, material_brightness);
     }
 
     // Vertical divider between groups.
     // Drawn in the gap between cells, with configurable width and height.
     if groups.len() > 1 {
-        let cell_content_width = width - (groups.len() as i32 - 1) * GROUP_MARGIN;
-        let cell_count = groups.len() as i32;
-        let cell_width = cell_content_width / cell_count;
         let divider_h = (height * DIVIDER_HEIGHT_PERCENT as i32) / 100;
         let divider_top = (height - divider_h) / 2;
         let divider_bottom = divider_top + divider_h;
 
-        for i in 1..cell_count {
-            // Divider sits in the centre of the margin gap.
-            let gap_center = i * (cell_width + GROUP_MARGIN) - GROUP_MARGIN / 2;
+        for group in groups.iter().take(groups.len() - 1) {
+            let gap_center = group.cell_right + GROUP_MARGIN / 2;
             let divider_left = gap_center - DIVIDER_WIDTH / 2;
             for dx in 0..DIVIDER_WIDTH {
                 draw_divider(&mut buffer, divider_left + dx, divider_top, divider_bottom);
@@ -308,65 +367,53 @@ fn build_group_layouts(
     width: i32,
     height: i32,
 ) -> Vec<GroupLayout> {
-    let mut visible_groups = Vec::new();
-
-    if config.monitoring.codex_enabled {
-        visible_groups.push((
-            WidgetGroupId::Codex,
-            effects.render_state_for(snapshot, "codex", now_ms),
-        ));
-    }
-    if config.monitoring.claude_enabled {
-        visible_groups.push((
-            WidgetGroupId::Claude,
-            effects.render_state_for(snapshot, "claude", now_ms),
-        ));
-    }
-
-    let cell_count = visible_groups.len().max(1) as i32;
-    // Total content area width excludes margins (those are accounted for in
-    // the total widget width computed by total_widget_width()).
-    let cell_content_width = if cell_count == 0 {
-        width
-    } else {
-        let margin_total = (cell_count - 1).max(0) * GROUP_MARGIN;
-        (width - margin_total).max(0) / cell_count
-    };
-    let logo_width = {
-        let first_id = visible_groups
-            .first()
-            .map(|(id, _)| *id)
-            .unwrap_or(WidgetGroupId::Codex);
-        widget_image::get_logo(first_id).width as i32
-    };
-    let logo_gap = LOGO_GAP;
-    let group_content_width = logo_width + logo_gap + LAMP_TRACK_WIDTH;
-
-    visible_groups
+    visible_group_ids(config)
         .into_iter()
-        .enumerate()
-        .map(|(index, (id, render_state))| {
-            let cell_left = index as i32 * (cell_content_width + GROUP_MARGIN);
-            let cell_right = cell_left + cell_content_width;
-            let cell_center_x = (cell_left + cell_right) / 2;
-            let content_left = cell_center_x - (group_content_width / 2);
-            let group_top = ((height - GROUP_HEIGHT) / 2).max(0);
+        .scan(0, |cell_left, id| {
+            let cell_width = group_width_for(config, id, height);
+            let current_left = *cell_left;
+            *cell_left += cell_width + GROUP_MARGIN;
+            Some((id, current_left, cell_width))
+        })
+        .map(|(id, cell_left, cell_width)| {
+            let cell_right = (cell_left + cell_width).min(width);
+            let logo_width = widget_image::get_logo(id).width as i32;
             let logo_h = widget_image::get_logo(id).height as i32;
+            let material_size = effective_material_size(config, height);
+            let has_material = selected_material_group(config, id).is_some();
+            let group_height = if has_material {
+                GROUP_HEIGHT.max(material_size as i32)
+            } else {
+                GROUP_HEIGHT
+            };
+            let group_top = ((height - group_height) / 2).max(0);
             let hot_zone = RECT {
                 left: (cell_left + 4).max(0),
                 top: (group_top - 2).max(0),
                 right: (cell_right - 4).max((cell_left + GROUP_WIDTH).min(width)),
-                bottom: (group_top + GROUP_HEIGHT + 2).min(height),
+                bottom: (group_top + group_height + 2).min(height),
             };
-            let lamp_center_y = group_top as f32 + 19.5;
-            let first_center_x =
-                content_left as f32 + logo_width as f32 + logo_gap as f32 + LAMP_RADIUS;
+            let lamp_center_y = height as f32 / 2.0;
+            let first_center_x = cell_left as f32
+                + logo_width as f32
+                + LOGO_GAP as f32
+                + if has_material {
+                    material_size as f32 / 2.0
+                } else {
+                    LAMP_RADIUS
+                };
+            let lamp_spacing = if has_material {
+                material_size as f32 + MATERIAL_GAP as f32
+            } else {
+                LAMP_SPACING as f32
+            };
 
             GroupLayout {
                 id,
-                logo_left: content_left,
-                logo_top: group_top + (GROUP_HEIGHT - logo_h) / 2,
-                render_state,
+                cell_right,
+                logo_left: cell_left,
+                logo_top: group_top + (group_height - logo_h) / 2,
+                render_state: effects.render_state_for(snapshot, id.source_id(), now_ms),
                 hot_zone,
                 lights: [
                     LampLayout {
@@ -375,28 +422,33 @@ fn build_group_layouts(
                         radius: LAMP_RADIUS,
                     },
                     LampLayout {
-                        center_x: first_center_x + LAMP_SPACING as f32,
+                        center_x: first_center_x + lamp_spacing,
                         center_y: lamp_center_y,
                         radius: LAMP_RADIUS,
                     },
                     LampLayout {
-                        center_x: first_center_x + (LAMP_SPACING * 2) as f32,
+                        center_x: first_center_x + lamp_spacing * 2.0,
                         center_y: lamp_center_y,
                         radius: LAMP_RADIUS,
                     },
                 ],
-                material: selected_material_images(config, id),
+                material: selected_material_images(config, id, material_size),
             }
         })
         .collect()
 }
 
-fn draw_group(buffer: &mut PixelBuffer, group: &GroupLayout, palette: Palette) {
+fn draw_group(
+    buffer: &mut PixelBuffer,
+    group: &GroupLayout,
+    palette: Palette,
+    material_brightness: MaterialBrightness,
+) {
     let logo = widget_image::get_logo(group.id);
     widget_image::blit_logo(buffer, group.logo_left, group.logo_top, logo);
 
     if let Some(material) = &group.material {
-        draw_material_lamps(buffer, group, material, palette.inactive_brightness_percent);
+        draw_material_lamps(buffer, group, material, material_brightness);
         return;
     }
 
@@ -414,39 +466,49 @@ fn draw_group(buffer: &mut PixelBuffer, group: &GroupLayout, palette: Palette) {
 fn selected_material_images(
     config: &AppConfig,
     id: WidgetGroupId,
+    size: u32,
 ) -> Option<Arc<widget_image::MaterialGroupImages>> {
-    let selected_id = match id {
-        WidgetGroupId::Codex => config.widget_visual.codex_material_group_id.as_deref(),
-        WidgetGroupId::Claude => config.widget_visual.claude_material_group_id.as_deref(),
-    }?;
-    let group = config
-        .widget_visual
-        .material_groups
-        .iter()
-        .find(|group| group.id == selected_id)?;
-
-    widget_image::get_material_group_images(group).ok()
+    widget_image::get_material_group_images(selected_material_group(config, id)?, size).ok()
 }
 
 fn draw_material_lamps(
     buffer: &mut PixelBuffer,
     group: &GroupLayout,
     material: &widget_image::MaterialGroupImages,
-    inactive_brightness_percent: u8,
+    brightness: MaterialBrightness,
 ) {
     let images = [&material.green, &material.yellow, &material.red];
-    let inactive_alpha = ((u16::from(inactive_brightness_percent.clamp(12, 80)) * 255) / 100) as u8;
 
     for (index, lamp) in group.lights.iter().enumerate() {
-        let left = (lamp.center_x - lamp.radius).round() as i32;
-        let top = (lamp.center_y - lamp.radius).round() as i32;
-        widget_image::blit_material(buffer, left, top, images[index], inactive_alpha);
-
-        let active_alpha = group.render_state.lamps[index].alpha;
-        if active_alpha > 0 {
-            widget_image::blit_material(buffer, left, top, images[index], active_alpha);
-        }
+        let image = images[index];
+        let left = (lamp.center_x - image.width as f32 / 2.0).round() as i32;
+        let top = (lamp.center_y - image.height as f32 / 2.0).round() as i32;
+        let opacity = material_opacity(group.render_state, index, brightness);
+        widget_image::blit_material(buffer, left, top, image, opacity);
     }
+}
+
+fn material_opacity(state: GroupRenderState, index: usize, brightness: MaterialBrightness) -> u8 {
+    let percent = match state.display_state {
+        crate::ui_state::SourceVisualState::Idle => brightness.idle_percent,
+        crate::ui_state::SourceVisualState::Completed => {
+            if index == 0 {
+                brightness.steady_percent
+            } else {
+                brightness.idle_percent
+            }
+        }
+        crate::ui_state::SourceVisualState::Working
+        | crate::ui_state::SourceVisualState::NeedsAttention
+        | crate::ui_state::SourceVisualState::Error => {
+            if state.lamps[index].alpha == u8::MAX {
+                brightness.blink_percent
+            } else {
+                brightness.idle_percent
+            }
+        }
+    };
+    ((u16::from(percent) * 255) / 100) as u8
 }
 
 // Keep every indicator as a clean circular shell. Only active states receive bloom.
@@ -686,6 +748,26 @@ impl Palette {
     }
 }
 
+impl MaterialBrightness {
+    fn from_config(config: &AppConfig) -> Self {
+        let idle_percent = config
+            .widget_visual
+            .material_idle_brightness_percent
+            .min(80);
+        Self {
+            idle_percent,
+            blink_percent: config
+                .widget_visual
+                .material_blink_brightness_percent
+                .clamp(idle_percent, 100),
+            steady_percent: config
+                .widget_visual
+                .material_steady_brightness_percent
+                .clamp(idle_percent, 100),
+        }
+    }
+}
+
 fn parse_hex_color(value: &str) -> Option<Rgba> {
     let hex = value.trim().trim_start_matches('#');
     if hex.len() != 6 {
@@ -786,7 +868,7 @@ mod tests {
     use crate::{
         app_config::{AppConfig, MaterialGroup},
         ui_state::{AppStatusSnapshot, SourceVisualState},
-        widget_effects::WidgetEffectsState,
+        widget_effects::{LampRenderState, WidgetEffectsState},
     };
     use image::{ImageBuffer, RgbaImage};
     use std::{env, fs, path::Path};
@@ -848,6 +930,49 @@ mod tests {
             frame.pixels[index],
             frame.pixels[index + 3],
         )
+    }
+
+    #[test]
+    fn material_brightness_uses_final_opacity_for_each_effect_state() {
+        let brightness = MaterialBrightness {
+            idle_percent: 42,
+            blink_percent: 100,
+            steady_percent: 84,
+        };
+        let idle = GroupRenderState {
+            display_state: SourceVisualState::Idle,
+            lamps: [LampRenderState { alpha: 0 }; 3],
+        };
+        let blink_on = GroupRenderState {
+            display_state: SourceVisualState::Working,
+            lamps: [
+                LampRenderState { alpha: u8::MAX },
+                LampRenderState { alpha: 0 },
+                LampRenderState { alpha: 0 },
+            ],
+        };
+        let blink_off = GroupRenderState {
+            display_state: SourceVisualState::Working,
+            lamps: [
+                LampRenderState { alpha: 136 },
+                LampRenderState { alpha: 0 },
+                LampRenderState { alpha: 0 },
+            ],
+        };
+        let completed = GroupRenderState {
+            display_state: SourceVisualState::Completed,
+            lamps: [
+                LampRenderState { alpha: u8::MAX },
+                LampRenderState { alpha: 0 },
+                LampRenderState { alpha: 0 },
+            ],
+        };
+
+        assert_eq!(material_opacity(idle, 0, brightness), 107);
+        assert_eq!(material_opacity(blink_on, 0, brightness), 255);
+        assert_eq!(material_opacity(blink_off, 0, brightness), 107);
+        assert_eq!(material_opacity(completed, 0, brightness), 214);
+        assert_eq!(material_opacity(completed, 1, brightness), 107);
     }
 
     fn single_group_layout(state: SourceVisualState) -> GroupLayout {
@@ -1060,6 +1185,69 @@ mod tests {
             1,
             "custom material keeps the group hot zone"
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn custom_material_layout_uses_requested_size_and_caps_to_available_height() {
+        let root = env::temp_dir().join(format!(
+            "cc-traffic-light-material-layout-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test directory should exist");
+        for (name, color) in [
+            ("green.png", [0, 255, 0, 255]),
+            ("yellow.png", [255, 255, 0, 255]),
+            ("red.png", [255, 0, 0, 255]),
+        ] {
+            write_material_png(&root.join(name), color);
+        }
+
+        let group = MaterialGroup {
+            id: format!("layout-test-{}", std::process::id()),
+            name: "Layout test".to_string(),
+            green_path: root.join("green.png").display().to_string(),
+            yellow_path: root.join("yellow.png").display().to_string(),
+            red_path: root.join("red.png").display().to_string(),
+        };
+        let mut config = AppConfig::default_v1();
+        config.monitoring.claude_enabled = false;
+        config.widget_visual.material_groups = vec![group.clone()];
+        config.widget_visual.codex_material_group_id = Some(group.id);
+        config.widget_visual.material_display_size_px = 32;
+
+        let short_layout = build_group_layouts(
+            &snapshot_with_state(SourceVisualState::Working),
+            &WidgetEffectsState::default(),
+            0,
+            &config,
+            200,
+            24,
+        );
+        let short_group = &short_layout[0];
+        assert_eq!(short_group.material.as_ref().unwrap().green.width, 16);
+        assert_eq!(
+            short_group.lights[1].center_x - short_group.lights[0].center_x,
+            24.0
+        );
+
+        let tall_layout = build_group_layouts(
+            &snapshot_with_state(SourceVisualState::Working),
+            &WidgetEffectsState::default(),
+            0,
+            &config,
+            300,
+            40,
+        );
+        let tall_group = &tall_layout[0];
+        assert_eq!(tall_group.material.as_ref().unwrap().green.width, 32);
+        assert_eq!(
+            tall_group.lights[1].center_x - tall_group.lights[0].center_x,
+            40.0
+        );
+        assert!(tall_group.hot_zone.bottom - tall_group.hot_zone.top >= 32);
 
         let _ = fs::remove_dir_all(root);
     }

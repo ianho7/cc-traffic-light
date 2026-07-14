@@ -51,6 +51,10 @@ export interface AppConfig {
     material_groups: MaterialGroup[];
     codex_material_group_id: string | null;
     claude_material_group_id: string | null;
+    material_display_size_px: number;
+    material_idle_brightness_percent: number;
+    material_blink_brightness_percent: number;
+    material_steady_brightness_percent: number;
   };
   diagnostics: {
     last_opened_page: SettingsPageId;

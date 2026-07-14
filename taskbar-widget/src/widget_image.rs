@@ -18,8 +18,6 @@ use crate::{
     widget_render::{PixelBuffer, Rgba, WidgetGroupId},
 };
 
-const MATERIAL_IMAGE_SIZE: u32 = 16;
-
 /// Decoded RGBA logo data ready for pixel-blit rendering.
 pub struct LogoData {
     pub width: u32,
@@ -62,7 +60,7 @@ struct CachedMaterialGroup {
     images: Arc<MaterialGroupImages>,
 }
 
-static MATERIAL_GROUP_CACHE: OnceLock<Mutex<HashMap<String, CachedMaterialGroup>>> =
+static MATERIAL_GROUP_CACHE: OnceLock<Mutex<HashMap<(String, u32), CachedMaterialGroup>>> =
     OnceLock::new();
 
 fn decode_logo(bytes: &[u8]) -> &'static LogoData {
@@ -100,26 +98,28 @@ pub fn get_logo(id: WidgetGroupId) -> &'static LogoData {
 /// lamps, so a missing or corrupt user asset never breaks the widget.
 pub fn get_material_group_images(
     group: &MaterialGroup,
+    size: u32,
 ) -> Result<Arc<MaterialGroupImages>, String> {
     let stamp = material_group_stamp(group)?;
     let cache = MATERIAL_GROUP_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut cache = cache
         .lock()
         .map_err(|_| "material image cache lock poisoned".to_string())?;
+    let cache_key = (group.id.clone(), size);
 
-    if let Some(cached) = cache.get(&group.id) {
+    if let Some(cached) = cache.get(&cache_key) {
         if cached.stamp == stamp {
             return Ok(Arc::clone(&cached.images));
         }
     }
 
     let images = Arc::new(MaterialGroupImages {
-        green: decode_material_image(&group.green_path)?,
-        yellow: decode_material_image(&group.yellow_path)?,
-        red: decode_material_image(&group.red_path)?,
+        green: decode_material_image(&group.green_path, size)?,
+        yellow: decode_material_image(&group.yellow_path, size)?,
+        red: decode_material_image(&group.red_path, size)?,
     });
     cache.insert(
-        group.id.clone(),
+        cache_key,
         CachedMaterialGroup {
             stamp,
             images: Arc::clone(&images),
@@ -149,17 +149,12 @@ fn material_file_stamp(path: &str) -> Result<MaterialFileStamp, String> {
     })
 }
 
-fn decode_material_image(path: &str) -> Result<MaterialImageData, String> {
+fn decode_material_image(path: &str, size: u32) -> Result<MaterialImageData, String> {
     let bytes = fs::read(path).map_err(|error| format!("cannot read material {path}: {error}"))?;
     let image = load_from_memory(&bytes)
         .map_err(|error| format!("cannot decode material {path}: {error}"))?
         .to_rgba8();
-    let image = image::imageops::resize(
-        &image,
-        MATERIAL_IMAGE_SIZE,
-        MATERIAL_IMAGE_SIZE,
-        FilterType::Triangle,
-    );
+    let image = image::imageops::resize(&image, size, size, FilterType::Triangle);
     let (width, height) = image.dimensions();
     Ok(MaterialImageData {
         width,
@@ -282,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn material_group_decodes_to_fixed_taskbar_size_and_reloads_when_changed() {
+    fn material_group_decodes_to_requested_size_and_reloads_when_changed() {
         let root =
             env::temp_dir().join(format!("cc-traffic-light-material-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -296,17 +291,18 @@ mod tests {
         }
         let group = test_group(&root);
 
-        let first = get_material_group_images(&group).expect("material group should decode");
-        assert_eq!(
-            (first.green.width, first.green.height),
-            (MATERIAL_IMAGE_SIZE, MATERIAL_IMAGE_SIZE)
-        );
+        let first = get_material_group_images(&group, 16).expect("material group should decode");
+        assert_eq!((first.green.width, first.green.height), (16, 16));
         assert_eq!(&first.green.pixels[..4], &[0, 255, 0, 255]);
 
         write_test_png(&root.join("green.png"), 5, [0, 0, 255, 255]);
         let second =
-            get_material_group_images(&group).expect("changed material group should decode");
+            get_material_group_images(&group, 16).expect("changed material group should decode");
         assert_eq!(&second.green.pixels[..4], &[0, 0, 255, 255]);
+
+        let enlarged = get_material_group_images(&group, 32)
+            .expect("different requested size should decode a new cache entry");
+        assert_eq!((enlarged.green.width, enlarged.green.height), (32, 32));
 
         let _ = fs::remove_dir_all(root);
     }
@@ -321,6 +317,6 @@ mod tests {
             red_path: "C:/does-not-exist/red.png".to_string(),
         };
 
-        assert!(get_material_group_images(&group).is_err());
+        assert!(get_material_group_images(&group, 16).is_err());
     }
 }

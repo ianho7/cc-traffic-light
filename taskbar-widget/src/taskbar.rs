@@ -597,7 +597,8 @@ pub fn position_in_taskbar(
     let runtime_config = settings_bridge::current_config();
     let module_width = match enabled_group_count {
         0 => 0,
-        _ => widget_render::total_widget_width(enabled_group_count).min(parent_width.max(1)),
+        _ => widget_render::total_widget_width(&runtime_config, parent_height)
+            .min(parent_width.max(1)),
     };
     let margin = 8;
     let occupied_rects = collect_peer_widget_rects(hwnd, probe, &parent_rect);

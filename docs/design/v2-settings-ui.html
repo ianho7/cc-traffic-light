@@ -1,39 +1,553 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CC Traffic Light Settings V2 Final</title>
-<style>
-:root{--bg:#f5f5f2;--paper:#fffefa;--ink:#151515;--muted:#777;--line:#deded8;--green:#34c759;--yellow:#ffcc00;--red:#ff3b30;--mono:ui-monospace,Consolas,monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"SF Pro Display","Segoe UI",Arial,sans-serif}body:before{content:"";position:fixed;inset:0;background-image:radial-gradient(#111 1px,transparent 1px);background-size:16px 16px;opacity:.04;pointer-events:none;z-index:0}.app{position:relative;z-index:1;display:grid;grid-template-columns:240px 1fr;min-height:100vh}.side{border-right:1px solid var(--line);padding:24px;background:#fafaf7}.brand{font:800 12px var(--mono);letter-spacing:.16em;margin-bottom:32px}.nav button{cursor:pointer;display:block;width:100%;border:0;background:none;text-align:left;padding:15px;border-radius:12px;margin-bottom:6px;font:700 12px var(--mono);cursor:pointer;color:#777}.nav button.active{background:#111;color:white}.main{padding:36px;max-width:1250px}.page{display:none}.page.active{display:block}.header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:28px}.meta{font:700 11px var(--mono);letter-spacing:.16em;color:#888;text-transform:uppercase}.header h1{font-size:64px;letter-spacing:-.08em;margin:8px 0}.sub{color:#777}.card{border:1px solid var(--line);background:var(--paper)}.pill{border:1px solid var(--line);border-radius:999px;padding:8px 12px;font:700 11px var(--mono)}
-/* overview */.signal-desk{display:grid;grid-template-columns:170px 1fr 240px;gap:24px;align-items:center;padding:32px}.traffic{background:#111;border-radius:50px;padding:18px;display:grid;gap:14px}.lamp{width:58px;height:58px;border-radius:50%;background:#333}.lamp.green{background:var(--green);box-shadow:0 0 30px #34c75966}.lamp.yellow{background:var(--yellow)}.state{font-size:90px;font-weight:950;letter-spacing:-.12em}.info{padding:18px}.info div{padding:12px;border-bottom:1px solid var(--line);font:700 12px var(--mono)}.agents{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px}.agent{padding:24px}.agent h2{font-size:22px}.agent strong{display:block;font-size:42px;margin:22px 0}
-/* general */.toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.toggle{padding:28px;min-height:190px}.toggle h2{font-size:24px}.switch{margin-top:30px;width:74px;height:38px;border-radius:999px;background:#eee;border:1px solid #ccc;position:relative}.switch:after{content:"";width:28px;height:28px;border-radius:50%;background:#999;position:absolute;left:4px;top:4px}.switch.on{background:#e8f7ed}.switch.on:after{left:40px;background:var(--green)}.key{font:700 11px var(--mono);color:#999}
-/* monitoring */.nodes{display:grid;grid-template-columns:1fr 1fr;gap:22px}.node{padding:28px;min-height:260px}.node h2{font-size:36px}.node .big{font-size:58px;font-weight:950;margin:35px 0}.node .dot{width:12px;height:12px;border-radius:50%;display:inline-block;background:var(--green)}
-/* appearance */.objects{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.object{padding:30px;text-align:center}.object-dot{width:130px;height:130px;border-radius:50%;margin:25px auto}.g{background:var(--green);box-shadow:0 0 40px #34c75955}.y{background:var(--yellow)}.r{background:var(--red)}.slider{height:5px;background:#ddd;margin:30px}.slider:before{content:"";display:block;width:42%;height:100%;background:#111}
-/* about */.version-card{padding:0;overflow:hidden}.about-row{display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:center;padding:34px;border-bottom:1px solid var(--line)}.about-row:last-child{border-bottom:0}.about-label{font-size:24px;font-weight:900;letter-spacing:-.05em}.about-key{font:800 11px var(--mono);letter-spacing:.14em;color:#999;margin-top:8px}.about-product{font-size:34px;font-weight:900;letter-spacing:-.06em}.version{font:950 100px var(--mono);letter-spacing:-.12em}.about-note{margin-top:18px;padding:16px 18px;border:1px solid var(--line);background:#fafaf7;color:#777;font:700 12px var(--mono);letter-spacing:.08em}
-@media(max-width:900px){.app{grid-template-columns:1fr}.main{padding:20px}.signal-desk,.toggle-grid,.nodes,.objects{grid-template-columns:1fr}}
-</style></head>
-<body><div class="app"><aside class="side"><div class="brand">◆ CC TRAFFIC LIGHT</div><nav class="nav"><button class="active" data-p="overview">01 总览</button><button data-p="general">02 通用</button><button data-p="monitoring">03 监听</button><button data-p="appearance">04 外观</button><button data-p="about">05 关于</button></nav></aside>
-<main class="main">
-<section class="page active" id="overview"><div class="header"><div class="meta">STATUS SUMMARY</div><h1>总览</h1><p class="sub">01 Center Signal Desk</p></div><div class="card signal-desk"><div class="traffic"><i class="lamp"></i><i class="lamp"></i><i class="lamp green"></i></div><div><div class="meta">OVERALL STATE</div><div class="state">空闲</div><p class="sub">Claude Code 空闲 ｜ Codex 空闲</p></div><div class="info"><div>实时后端</div><div>LAST REFRESH<br>2026/07/08</div><div>ERROR<br>无</div></div></div><div class="agents"><div class="card agent"><h2>CODEX</h2><strong>空闲</strong><span class="pill">NODE</span></div><div class="card agent"><h2>CLAUDE CODE</h2><strong>空闲</strong><span class="pill">NODE</span></div></div></section>
-<section class="page" id="general"><div class="header"><div class="meta">SYSTEM BEHAVIOR</div><h1>通用</h1><p class="sub">03 Toggle Matrix</p></div><div class="toggle-grid"><div class="card toggle"><h2>登录时启动</h2><div class="key">START_ON_LOGIN</div><div class="switch"></div></div><div class="card toggle"><h2>启动最小化到托盘</h2><div class="key">MINIMIZE_ON_START</div><div class="switch on"></div></div><div class="card toggle"><h2>关闭窗口到托盘</h2><div class="key">CLOSE_TO_TRAY</div><div class="switch on"></div></div><div class="card toggle"><h2>语言</h2><div class="key">LANGUAGE_MODE</div><span class="pill">跟随系统</span></div></div></section>
-<section class="page" id="monitoring"><div class="header"><div class="meta">SOURCE MATRIX</div><h1>监听</h1><p class="sub">01 Node Cards</p></div><div class="nodes"><div class="card node"><h2>Codex</h2><div class="big">ON</div><span class="pill"><i class="dot"></i>参与判断</span></div><div class="card node"><h2>Claude Code</h2><div class="big">ON</div><span class="pill"><i class="dot"></i>参与判断</span></div></div></section>
-<section class="page" id="appearance"><div class="header"><div class="meta">WIDGET PALETTE</div><h1>外观</h1><p class="sub">03 Dot Object</p></div><div class="objects"><div class="card object"><h2>GREEN</h2><div class="object-dot g"></div><span class="pill">#34C759</span></div><div class="card object"><h2>YELLOW</h2><div class="object-dot y"></div><span class="pill">#FFCC00</span></div><div class="card object"><h2>RED</h2><div class="object-dot r"></div><span class="pill">#FF3B30</span></div></div><div class="card" style="padding:20px;margin-top:20px"><b>未激活亮度</b><div class="slider"></div></div></section>
-<section class="page" id="about"><div class="header"><div class="meta">DEVICE SPEC</div><h1>关于</h1><p class="sub">01 Version Card</p></div><div class="card version-card"><div class="about-row"><div><div class="about-label">产品</div><div class="about-key">PRODUCT</div></div><div class="about-product">CC Traffic Light</div></div><div class="about-row"><div><div class="about-label">版本</div><div class="about-key">VERSION</div></div><div class="version">0.1.0</div></div></div><div class="about-note">版本号来自 bootstrap.about.version，产品名称来自 bootstrap.about.product_name。</div></section>
-</main></div><script>
-(function(){
- const buttons=document.querySelectorAll(".nav button[data-p]");
- const pages=document.querySelectorAll(".page");
- buttons.forEach(function(btn){
-   btn.type="button";
-   btn.addEventListener("click",function(e){
-     e.preventDefault();
-     buttons.forEach(function(x){x.classList.remove("active")});
-     pages.forEach(function(x){x.classList.remove("active")});
-     btn.classList.add("active");
-     const pageId=btn.dataset.p;
-     const target=document.getElementById(pageId);
-     if(target){target.classList.add("active");}
-     document.documentElement.setAttribute("data-page", pageId);
-   });
- });
-})();
-</script></body></html>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CC Traffic Light Settings V2 Final</title>
+  <style>
+    :root {
+      --bg: #f5f5f2;
+      --paper: #fffefa;
+      --ink: #151515;
+      --muted: #777;
+      --line: #deded8;
+      --green: #34c759;
+      --yellow: #ffcc00;
+      --red: #ff3b30;
+      --mono: ui-monospace, Consolas, monospace
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "SF Pro Display", "Segoe UI", Arial, sans-serif
+    }
+
+    body:before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(#111 1px, transparent 1px);
+      background-size: 16px 16px;
+      opacity: .04;
+      pointer-events: none;
+      z-index: 0
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh
+    }
+
+    .side {
+      border-right: 1px solid var(--line);
+      padding: 24px;
+      background: #fafaf7
+    }
+
+    .brand {
+      font: 800 12px var(--mono);
+      letter-spacing: .16em;
+      margin-bottom: 32px
+    }
+
+    .nav button {
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      border: 0;
+      background: none;
+      text-align: left;
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 6px;
+      font: 700 12px var(--mono);
+      cursor: pointer;
+      color: #777
+    }
+
+    .nav button.active {
+      background: #111;
+      color: white
+    }
+
+    .main {
+      padding: 36px;
+      max-width: 1250px
+    }
+
+    .page {
+      display: none
+    }
+
+    .page.active {
+      display: block
+    }
+
+    .header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 22px;
+      margin-bottom: 28px
+    }
+
+    .meta {
+      font: 700 11px var(--mono);
+      letter-spacing: .16em;
+      color: #888;
+      text-transform: uppercase
+    }
+
+    .header h1 {
+      font-size: 64px;
+      letter-spacing: -.08em;
+      margin: 8px 0
+    }
+
+    .sub {
+      color: #777
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: var(--paper)
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: 700 11px var(--mono)
+    }
+
+    /* overview */
+    .signal-desk {
+      display: grid;
+      grid-template-columns: 170px 1fr 240px;
+      gap: 24px;
+      align-items: center;
+      padding: 32px
+    }
+
+    .traffic {
+      background: #111;
+      border-radius: 50px;
+      padding: 18px;
+      display: grid;
+      gap: 14px
+    }
+
+    .lamp {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: #333
+    }
+
+    .lamp.green {
+      background: var(--green);
+      box-shadow: 0 0 30px #34c75966
+    }
+
+    .lamp.yellow {
+      background: var(--yellow)
+    }
+
+    .state {
+      font-size: 90px;
+      font-weight: 950;
+      letter-spacing: -.12em
+    }
+
+    .info {
+      padding: 18px
+    }
+
+    .info div {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      font: 700 12px var(--mono)
+    }
+
+    .agents {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 20px
+    }
+
+    .agent {
+      padding: 24px
+    }
+
+    .agent h2 {
+      font-size: 22px
+    }
+
+    .agent strong {
+      display: block;
+      font-size: 42px;
+      margin: 22px 0
+    }
+
+    /* general */
+    .toggle-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px
+    }
+
+    .toggle {
+      padding: 28px;
+      min-height: 190px
+    }
+
+    .toggle h2 {
+      font-size: 24px
+    }
+
+    .switch {
+      margin-top: 30px;
+      width: 74px;
+      height: 38px;
+      border-radius: 999px;
+      background: #eee;
+      border: 1px solid #ccc;
+      position: relative
+    }
+
+    .switch:after {
+      content: "";
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #999;
+      position: absolute;
+      left: 4px;
+      top: 4px
+    }
+
+    .switch.on {
+      background: #e8f7ed
+    }
+
+    .switch.on:after {
+      left: 40px;
+      background: var(--green)
+    }
+
+    .key {
+      font: 700 11px var(--mono);
+      color: #999
+    }
+
+    /* monitoring */
+    .nodes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px
+    }
+
+    .node {
+      padding: 28px;
+      min-height: 260px
+    }
+
+    .node h2 {
+      font-size: 36px
+    }
+
+    .node .big {
+      font-size: 58px;
+      font-weight: 950;
+      margin: 35px 0
+    }
+
+    .node .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      background: var(--green)
+    }
+
+    /* appearance */
+    .objects {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px
+    }
+
+    .object {
+      padding: 30px;
+      text-align: center
+    }
+
+    .object-dot {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      margin: 25px auto
+    }
+
+    .g {
+      background: var(--green);
+      box-shadow: 0 0 40px #34c75955
+    }
+
+    .y {
+      background: var(--yellow)
+    }
+
+    .r {
+      background: var(--red)
+    }
+
+    .slider {
+      height: 5px;
+      background: #ddd;
+      margin: 30px
+    }
+
+    .slider:before {
+      content: "";
+      display: block;
+      width: 42%;
+      height: 100%;
+      background: #111
+    }
+
+    /* about */
+    .version-card {
+      padding: 0;
+      overflow: hidden
+    }
+
+    .about-row {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 24px;
+      align-items: center;
+      padding: 34px;
+      border-bottom: 1px solid var(--line)
+    }
+
+    .about-row:last-child {
+      border-bottom: 0
+    }
+
+    .about-label {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -.05em
+    }
+
+    .about-key {
+      font: 800 11px var(--mono);
+      letter-spacing: .14em;
+      color: #999;
+      margin-top: 8px
+    }
+
+    .about-product {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -.06em
+    }
+
+    .version {
+      font: 950 100px var(--mono);
+      letter-spacing: -.12em
+    }
+
+    .about-note {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      background: #fafaf7;
+      color: #777;
+      font: 700 12px var(--mono);
+      letter-spacing: .08em
+    }
+
+    @media(max-width:900px) {
+      .app {
+        grid-template-columns: 1fr
+      }
+
+      .main {
+        padding: 20px
+      }
+
+      .signal-desk,
+      .toggle-grid,
+      .nodes,
+      .objects {
+        grid-template-columns: 1fr
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand">◆ CC TRAFFIC LIGHT</div>
+      <nav class="nav"><button class="active" data-p="overview">01 总览</button><button data-p="general">02
+          通用</button><button data-p="monitoring">03 监听</button><button data-p="appearance">04 外观</button><button
+          data-p="about">05 关于</button></nav>
+    </aside>
+    <main class="main">
+      <section class="page active" id="overview">
+        <div class="header">
+          <div class="meta">STATUS SUMMARY</div>
+          <h1>总览</h1>
+          <p class="sub">01 Center Signal Desk</p>
+        </div>
+        <div class="card signal-desk">
+          <div class="traffic"><i class="lamp"></i><i class="lamp"></i><i class="lamp green"></i></div>
+          <div>
+            <div class="meta">OVERALL STATE</div>
+            <div class="state">空闲</div>
+            <p class="sub">Claude Code 空闲 ｜ Codex 空闲</p>
+          </div>
+          <div class="info">
+            <div>实时后端</div>
+            <div>LAST REFRESH<br>2026/07/08</div>
+            <div>ERROR<br>无</div>
+          </div>
+        </div>
+        <div class="agents">
+          <div class="card agent">
+            <h2>CODEX</h2><strong>空闲</strong><span class="pill">NODE</span>
+          </div>
+          <div class="card agent">
+            <h2>CLAUDE CODE</h2><strong>空闲</strong><span class="pill">NODE</span>
+          </div>
+        </div>
+      </section>
+      <section class="page" id="general">
+        <div class="header">
+          <div class="meta">SYSTEM BEHAVIOR</div>
+          <h1>通用</h1>
+          <p class="sub">03 Toggle Matrix</p>
+        </div>
+        <div class="toggle-grid">
+          <div class="card toggle">
+            <h2>登录时启动</h2>
+            <div class="key">START_ON_LOGIN</div>
+            <div class="switch"></div>
+          </div>
+          <div class="card toggle">
+            <h2>启动最小化到托盘</h2>
+            <div class="key">MINIMIZE_ON_START</div>
+            <div class="switch on"></div>
+          </div>
+          <div class="card toggle">
+            <h2>关闭窗口到托盘</h2>
+            <div class="key">CLOSE_TO_TRAY</div>
+            <div class="switch on"></div>
+          </div>
+          <div class="card toggle">
+            <h2>语言</h2>
+            <div class="key">LANGUAGE_MODE</div><span class="pill">跟随系统</span>
+          </div>
+        </div>
+      </section>
+      <section class="page" id="monitoring">
+        <div class="header">
+          <div class="meta">SOURCE MATRIX</div>
+          <h1>监听</h1>
+          <p class="sub">01 Node Cards</p>
+        </div>
+        <div class="nodes">
+          <div class="card node">
+            <h2>Codex</h2>
+            <div class="big">ON</div><span class="pill"><i class="dot"></i>参与判断</span>
+          </div>
+          <div class="card node">
+            <h2>Claude Code</h2>
+            <div class="big">ON</div><span class="pill"><i class="dot"></i>参与判断</span>
+          </div>
+        </div>
+      </section>
+      <section class="page" id="appearance">
+        <div class="header">
+          <div class="meta">WIDGET PALETTE</div>
+          <h1>外观</h1>
+          <p class="sub">03 Dot Object</p>
+        </div>
+        <div class="objects">
+          <div class="card object">
+            <h2>GREEN</h2>
+            <div class="object-dot g"></div><span class="pill">#34C759</span>
+          </div>
+          <div class="card object">
+            <h2>YELLOW</h2>
+            <div class="object-dot y"></div><span class="pill">#FFCC00</span>
+          </div>
+          <div class="card object">
+            <h2>RED</h2>
+            <div class="object-dot r"></div><span class="pill">#FF3B30</span>
+          </div>
+        </div>
+        <div class="card" style="padding:20px;margin-top:20px"><b>未激活亮度</b>
+          <div class="slider"></div>
+        </div>
+      </section>
+      <section class="page" id="about">
+        <div class="header">
+          <div class="meta">DEVICE SPEC</div>
+          <h1>关于</h1>
+          <p class="sub">01 Version Card</p>
+        </div>
+        <div class="card version-card">
+          <div class="about-row">
+            <div>
+              <div class="about-label">产品</div>
+              <div class="about-key">PRODUCT</div>
+            </div>
+            <div class="about-product">CC Traffic Light</div>
+          </div>
+          <div class="about-row">
+            <div>
+              <div class="about-label">版本</div>
+              <div class="about-key">VERSION</div>
+            </div>
+            <div class="version">0.1.0</div>
+          </div>
+        </div>
+        <div class="about-note">版本号来自 bootstrap.about.version，产品名称来自 bootstrap.about.product_name。</div>
+      </section>
+    </main>
+  </div>
+  <script>
+    (function () {
+      const buttons = document.querySelectorAll(".nav button[data-p]");
+      const pages = document.querySelectorAll(".page");
+      buttons.forEach(function (btn) {
+        btn.type = "button";
+        btn.addEventListener("click", function (e) {
+          e.preventDefault();
+          buttons.forEach(function (x) { x.classList.remove("active") });
+          pages.forEach(function (x) { x.classList.remove("active") });
+          btn.classList.add("active");
+          const pageId = btn.dataset.p;
+          const target = document.getElementById(pageId);
+          if (target) { target.classList.add("active"); }
+          document.documentElement.setAttribute("data-page", pageId);
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>

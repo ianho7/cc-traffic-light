@@ -1,24 +1,26 @@
 import SignalLamp from "./SignalLamp";
 
-type LampTone = "red" | "yellow" | "green" | "idle";
+export type SignalTone = "red" | "yellow" | "green" | "idle";
 
 interface SignalStackProps {
-  activeTone: LampTone;
+  activeTone: SignalTone;
+  size?: number;
 }
 
 /** Three traffic lamps arranged vertically in a dark housing */
-export default function SignalStack({ activeTone }: SignalStackProps) {
-  const tones: LampTone[] = ["green", "yellow", "red"];
+export default function SignalStack({ activeTone, size = 58 }: SignalStackProps) {
+  const lampSize = Math.max(8, size);
+  const tones: SignalTone[] = ["green", "yellow", "red"];
 
   return (
     <div
       className="signal-stack"
       style={{
         background: "#111",
-        borderRadius: 50,
-        padding: 18,
+        borderRadius: Math.round(lampSize * 0.86),
+        padding: Math.round(lampSize * 0.31),
         display: "grid",
-        gap: 14
+        gap: Math.round(lampSize * 0.24)
       }}
     >
       {tones.map((tone) => (
@@ -26,6 +28,7 @@ export default function SignalStack({ activeTone }: SignalStackProps) {
           active={tone === activeTone}
           glow={tone === "green"}
           key={tone}
+          size={lampSize}
           tone={tone}
         />
       ))}
