@@ -48,6 +48,9 @@ export interface AppConfig {
   widget_visual: {
     placement: "left" | "right";
     palette: WidgetPaletteConfig;
+    material_groups: MaterialGroup[];
+    codex_material_group_id: string | null;
+    claude_material_group_id: string | null;
   };
   diagnostics: {
     last_opened_page: SettingsPageId;
@@ -61,6 +64,19 @@ export interface WidgetPaletteConfig {
   yellow: string;
   red: string;
   inactive_brightness_percent: number;
+}
+
+export interface MaterialGroup {
+  id: string;
+  name: string;
+  green_path: string;
+  yellow_path: string;
+  red_path: string;
+}
+
+export interface MaterialGroupAvailability {
+  group_id: string;
+  available: boolean;
 }
 
 export interface SettingsTransportDto {

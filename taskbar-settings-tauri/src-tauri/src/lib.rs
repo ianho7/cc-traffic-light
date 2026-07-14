@@ -1,5 +1,6 @@
 use std::{
-    env,
+    env, fs,
+    path::PathBuf,
     sync::{
         Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -7,14 +8,17 @@ use std::{
 };
 
 use shared_core::{
-    app_config::{AppConfig, changed_keys, config_file_path, default_widget_palette},
+    app_config::{
+        AppConfig, MaterialGroup, changed_keys, config_dir_path, config_file_path,
+        default_widget_palette,
+    },
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
         HookDiagnosticPathsDto, HookDiagnosticsDto, HookStatusDto, RuntimeLogDiagnosticsDto,
-        SettingsAboutMetadataDto,
-        SettingsBootstrapDto, SettingsIpcCommand, SettingsIpcEnvelope, SettingsIpcResponse,
-        SettingsIpcResponseEnvelope, SettingsRefreshResultDto, SettingsSaveResultDto,
-        SettingsTransportDto, TAURI_SETTINGS_PIPE_NAME, TAURI_SETTINGS_PROTOCOL_VERSION,
+        SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand, SettingsIpcEnvelope,
+        SettingsIpcResponse, SettingsIpcResponseEnvelope, SettingsRefreshResultDto,
+        SettingsSaveResultDto, SettingsTransportDto, TAURI_SETTINGS_PIPE_NAME,
+        TAURI_SETTINGS_PROTOCOL_VERSION,
     },
 };
 use windows::{
@@ -31,6 +35,55 @@ struct FakeBackendState {
 static FAKE_STATE: OnceLock<Mutex<FakeBackendState>> = OnceLock::new();
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 const FAKE_BACKEND_ENV: &str = "CC_TRAFFIC_LIGHT_TAURI_FAKE_BACKEND";
+const MATERIAL_IMAGE_SIZE: u32 = 64;
+const MATERIAL_MAX_BYTES: usize = 256 * 1024;
+
+struct MaterialFileSwap {
+    final_path: PathBuf,
+    backup_path: Option<PathBuf>,
+}
+
+struct MaterialWriteTransaction {
+    swaps: Vec<MaterialFileSwap>,
+}
+
+impl MaterialWriteTransaction {
+    fn commit(self) {
+        for swap in self.swaps {
+            if let Some(backup_path) = swap.backup_path {
+                let _ = fs::remove_file(backup_path);
+            }
+        }
+    }
+
+    fn rollback(self) {
+        for swap in self.swaps {
+            let _ = fs::remove_file(&swap.final_path);
+            if let Some(backup_path) = swap.backup_path {
+                let _ = fs::rename(backup_path, swap.final_path);
+            }
+        }
+    }
+}
+
+struct MaterialDeleteTransaction {
+    original_path: PathBuf,
+    staged_path: Option<PathBuf>,
+}
+
+impl MaterialDeleteTransaction {
+    fn commit(self) {
+        if let Some(staged_path) = self.staged_path {
+            let _ = fs::remove_dir_all(staged_path);
+        }
+    }
+
+    fn rollback(self) {
+        if let Some(staged_path) = self.staged_path {
+            let _ = fs::rename(staged_path, self.original_path);
+        }
+    }
+}
 
 fn state() -> &'static Mutex<FakeBackendState> {
     FAKE_STATE.get_or_init(|| {
@@ -103,7 +156,8 @@ fn fake_hook_diagnostics() -> HookDiagnosticsDto {
 fn fake_runtime_log_diagnostics() -> RuntimeLogDiagnosticsDto {
     RuntimeLogDiagnosticsDto {
         directory_path: r"C:\Users\fake\AppData\Local\CC Traffic Light\logs".to_string(),
-        runtime_log_path: r"C:\Users\fake\AppData\Local\CC Traffic Light\logs\runtime.log".to_string(),
+        runtime_log_path: r"C:\Users\fake\AppData\Local\CC Traffic Light\logs\runtime.log"
+            .to_string(),
         runtime_log_exists: true,
     }
 }
@@ -305,6 +359,256 @@ fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, String> {
 }
 
 #[tauri::command]
+fn save_material_group(
+    settings: AppConfig,
+    group_id: String,
+    name: String,
+    green_png: Vec<u8>,
+    yellow_png: Vec<u8>,
+    red_png: Vec<u8>,
+) -> Result<SettingsSaveResultDto, String> {
+    let group = build_material_group(&group_id, &name)?;
+    let transaction = stage_material_group_write(&group, [&green_png, &yellow_png, &red_png])?;
+    let mut next = settings;
+    if let Some(existing) = next
+        .widget_visual
+        .material_groups
+        .iter_mut()
+        .find(|existing| existing.id == group.id)
+    {
+        *existing = group;
+    } else {
+        next.widget_visual.material_groups.push(group);
+    }
+
+    match save_settings(next) {
+        Ok(result) => {
+            transaction.commit();
+            Ok(result)
+        }
+        Err(error) => {
+            transaction.rollback();
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+fn delete_material_group(
+    settings: AppConfig,
+    group_id: String,
+) -> Result<SettingsSaveResultDto, String> {
+    if settings.widget_visual.codex_material_group_id.as_deref() == Some(group_id.as_str())
+        || settings.widget_visual.claude_material_group_id.as_deref() == Some(group_id.as_str())
+    {
+        return Err("material group is currently applied to an agent".to_string());
+    }
+    if !settings
+        .widget_visual
+        .material_groups
+        .iter()
+        .any(|group| group.id == group_id)
+    {
+        return Err("material group does not exist".to_string());
+    }
+
+    let transaction = stage_material_group_delete(&group_id)?;
+    let mut next = settings;
+    next.widget_visual
+        .material_groups
+        .retain(|group| group.id != group_id);
+
+    match save_settings(next) {
+        Ok(result) => {
+            transaction.commit();
+            Ok(result)
+        }
+        Err(error) => {
+            transaction.rollback();
+            Err(error)
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct MaterialGroupAvailability {
+    group_id: String,
+    available: bool,
+}
+
+#[tauri::command]
+fn get_material_group_availability(settings: AppConfig) -> Vec<MaterialGroupAvailability> {
+    settings
+        .widget_visual
+        .material_groups
+        .iter()
+        .map(|group| MaterialGroupAvailability {
+            group_id: group.id.clone(),
+            available: [
+                group.green_path.as_str(),
+                group.yellow_path.as_str(),
+                group.red_path.as_str(),
+            ]
+            .into_iter()
+            .all(|path| {
+                fs::read(path)
+                    .ok()
+                    .and_then(|bytes| validate_material_png(&bytes).ok())
+                    .is_some()
+            }),
+        })
+        .collect()
+}
+
+fn build_material_group(group_id: &str, name: &str) -> Result<MaterialGroup, String> {
+    if !is_safe_material_group_id(group_id) {
+        return Err("material group id must contain only letters, numbers, '-' or '_'".to_string());
+    }
+    if name.trim().is_empty() {
+        return Err("material group name cannot be empty".to_string());
+    }
+    let directory = material_group_directory(group_id);
+    Ok(MaterialGroup {
+        id: group_id.to_string(),
+        name: name.trim().to_string(),
+        green_path: directory.join("green.png").display().to_string(),
+        yellow_path: directory.join("yellow.png").display().to_string(),
+        red_path: directory.join("red.png").display().to_string(),
+    })
+}
+
+fn is_safe_material_group_id(group_id: &str) -> bool {
+    !group_id.is_empty()
+        && group_id.len() <= 64
+        && group_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
+
+fn material_assets_directory() -> PathBuf {
+    config_dir_path().join("assets")
+}
+
+fn material_group_directory(group_id: &str) -> PathBuf {
+    material_assets_directory().join(group_id)
+}
+
+fn stage_material_group_write(
+    group: &MaterialGroup,
+    images: [&[u8]; 3],
+) -> Result<MaterialWriteTransaction, String> {
+    for image in images {
+        validate_material_png(image)?;
+    }
+
+    let directory = material_group_directory(&group.id);
+    fs::create_dir_all(&directory).map_err(|error| {
+        format!(
+            "cannot create material directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    let request = next_request_id();
+    let paths = [
+        (directory.join("green.png"), images[0]),
+        (directory.join("yellow.png"), images[1]),
+        (directory.join("red.png"), images[2]),
+    ];
+    let mut temporary_paths = Vec::with_capacity(paths.len());
+    for (final_path, image) in &paths {
+        let temporary_path = final_path.with_extension(format!("png.{request}.tmp"));
+        if let Err(error) = fs::write(&temporary_path, image) {
+            for path in temporary_paths {
+                let _ = fs::remove_file(path);
+            }
+            return Err(format!(
+                "cannot stage material {}: {error}",
+                final_path.display()
+            ));
+        }
+        temporary_paths.push(temporary_path);
+    }
+
+    let mut swaps = Vec::with_capacity(paths.len());
+    for ((final_path, _), temporary_path) in paths.iter().zip(temporary_paths.iter()) {
+        let backup_path = if final_path.exists() {
+            let backup_path = final_path.with_extension(format!("png.{request}.bak"));
+            if let Err(error) = fs::rename(final_path, &backup_path) {
+                let transaction = MaterialWriteTransaction { swaps };
+                transaction.rollback();
+                for path in &temporary_paths {
+                    let _ = fs::remove_file(path);
+                }
+                return Err(format!(
+                    "cannot back up material {}: {error}",
+                    final_path.display()
+                ));
+            }
+            Some(backup_path)
+        } else {
+            None
+        };
+        swaps.push(MaterialFileSwap {
+            final_path: final_path.clone(),
+            backup_path,
+        });
+
+        if let Err(error) = fs::rename(temporary_path, final_path) {
+            let transaction = MaterialWriteTransaction { swaps };
+            transaction.rollback();
+            for path in &temporary_paths {
+                let _ = fs::remove_file(path);
+            }
+            return Err(format!(
+                "cannot promote material {}: {error}",
+                final_path.display()
+            ));
+        }
+    }
+
+    Ok(MaterialWriteTransaction { swaps })
+}
+
+fn stage_material_group_delete(group_id: &str) -> Result<MaterialDeleteTransaction, String> {
+    if !is_safe_material_group_id(group_id) {
+        return Err("material group id is invalid".to_string());
+    }
+    let original_path = material_group_directory(group_id);
+    if !original_path.exists() {
+        return Ok(MaterialDeleteTransaction {
+            original_path,
+            staged_path: None,
+        });
+    }
+    let staged_path =
+        original_path.with_file_name(format!("{group_id}.{}.delete", next_request_id()));
+    fs::rename(&original_path, &staged_path).map_err(|error| {
+        format!(
+            "cannot stage material group deletion {}: {error}",
+            original_path.display()
+        )
+    })?;
+    Ok(MaterialDeleteTransaction {
+        original_path,
+        staged_path: Some(staged_path),
+    })
+}
+
+fn validate_material_png(bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() || bytes.len() > MATERIAL_MAX_BYTES {
+        return Err("material PNG size is invalid".to_string());
+    }
+    let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
+        .map_err(|error| format!("material must be a PNG: {error}"))?;
+    if image.width() != MATERIAL_IMAGE_SIZE || image.height() != MATERIAL_IMAGE_SIZE {
+        return Err(format!(
+            "material PNG must be {MATERIAL_IMAGE_SIZE}x{MATERIAL_IMAGE_SIZE}"
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn request_refresh() -> Result<SettingsRefreshResultDto, String> {
     call_or_fake(
         SettingsIpcCommand::RequestRefresh,
@@ -476,6 +780,9 @@ pub fn run() {
             get_snapshot,
             get_settings,
             save_settings,
+            save_material_group,
+            delete_material_group,
+            get_material_group_availability,
             request_refresh,
             notify_settings_applied,
             get_hook_status,
@@ -489,4 +796,61 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri settings");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ColorType, ImageBuffer, ImageEncoder, RgbaImage, codecs::png::PngEncoder};
+
+    fn valid_material_png(width: u32, height: u32) -> Vec<u8> {
+        let image: RgbaImage = ImageBuffer::from_pixel(width, height, image::Rgba([1, 2, 3, 255]));
+        let mut bytes = Vec::new();
+        PngEncoder::new(&mut bytes)
+            .write_image(image.as_raw(), width, height, ColorType::Rgba8.into())
+            .expect("PNG should encode");
+        bytes
+    }
+
+    #[test]
+    fn material_png_validation_requires_fixed_size_png() {
+        assert!(validate_material_png(&valid_material_png(64, 64)).is_ok());
+        assert!(validate_material_png(&valid_material_png(63, 64)).is_err());
+        assert!(validate_material_png(b"not a PNG").is_err());
+    }
+
+    #[test]
+    fn material_group_ids_are_path_safe() {
+        assert!(is_safe_material_group_id("retro_green-1"));
+        assert!(!is_safe_material_group_id("../outside"));
+        assert!(!is_safe_material_group_id(""));
+    }
+
+    #[test]
+    fn material_write_rollback_restores_previous_asset() {
+        let root = env::temp_dir().join(format!(
+            "cc-traffic-light-material-rollback-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test directory should exist");
+        let final_path = root.join("green.png");
+        let backup_path = root.join("green.png.backup");
+        fs::write(&final_path, b"new").expect("new material should exist");
+        fs::write(&backup_path, b"old").expect("backup material should exist");
+
+        MaterialWriteTransaction {
+            swaps: vec![MaterialFileSwap {
+                final_path: final_path.clone(),
+                backup_path: Some(backup_path),
+            }],
+        }
+        .rollback();
+
+        assert_eq!(
+            fs::read(final_path).expect("old material should be restored"),
+            b"old"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
 }

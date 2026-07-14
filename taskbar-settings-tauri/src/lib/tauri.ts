@@ -3,6 +3,7 @@ import type {
   AppConfig,
   HookDiagnosticsDto,
   HookStatusDto,
+  MaterialGroupAvailability,
   RuntimeLogDiagnosticsDto,
   SettingsBootstrapDto,
   SettingsRefreshResultDto,
@@ -24,6 +25,32 @@ export function getSettings(): Promise<AppConfig> {
 
 export function saveSettings(settings: AppConfig): Promise<SettingsSaveResultDto> {
   return invoke("save_settings", { settings });
+}
+
+export function saveMaterialGroup(
+  settings: AppConfig,
+  groupId: string,
+  name: string,
+  greenPng: number[],
+  yellowPng: number[],
+  redPng: number[]
+): Promise<SettingsSaveResultDto> {
+  return invoke("save_material_group", {
+    settings,
+    groupId,
+    name,
+    greenPng,
+    yellowPng,
+    redPng
+  });
+}
+
+export function deleteMaterialGroup(settings: AppConfig, groupId: string): Promise<SettingsSaveResultDto> {
+  return invoke("delete_material_group", { settings, groupId });
+}
+
+export function getMaterialGroupAvailability(settings: AppConfig): Promise<MaterialGroupAvailability[]> {
+  return invoke("get_material_group_availability", { settings });
 }
 
 export function requestRefresh(): Promise<SettingsRefreshResultDto> {

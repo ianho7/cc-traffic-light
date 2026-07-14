@@ -4,6 +4,7 @@ use crate::{
     widget_effects::{GroupRenderState, WidgetEffectsState},
     widget_image,
 };
+use std::sync::Arc;
 use windows::Win32::{
     Foundation::{COLORREF, HWND, POINT, RECT, SIZE},
     Graphics::Gdi::{
@@ -55,6 +56,7 @@ struct GroupLayout {
     render_state: GroupRenderState,
     hot_zone: RECT,
     lights: [LampLayout; 3],
+    material: Option<Arc<widget_image::MaterialGroupImages>>,
 }
 
 #[derive(Clone, Copy)]
@@ -383,6 +385,7 @@ fn build_group_layouts(
                         radius: LAMP_RADIUS,
                     },
                 ],
+                material: selected_material_images(config, id),
             }
         })
         .collect()
@@ -392,6 +395,11 @@ fn draw_group(buffer: &mut PixelBuffer, group: &GroupLayout, palette: Palette) {
     let logo = widget_image::get_logo(group.id);
     widget_image::blit_logo(buffer, group.logo_left, group.logo_top, logo);
 
+    if let Some(material) = &group.material {
+        draw_material_lamps(buffer, group, material, palette.inactive_brightness_percent);
+        return;
+    }
+
     for (index, lamp) in group.lights.iter().enumerate() {
         let lamp_state = group.render_state.lamps[index];
         let recipe = lamp_paint_recipe(index, palette);
@@ -399,6 +407,44 @@ fn draw_group(buffer: &mut PixelBuffer, group: &GroupLayout, palette: Palette) {
 
         if lamp_state.alpha > 0 {
             draw_active_lamp(buffer, lamp, recipe, lamp_state.alpha);
+        }
+    }
+}
+
+fn selected_material_images(
+    config: &AppConfig,
+    id: WidgetGroupId,
+) -> Option<Arc<widget_image::MaterialGroupImages>> {
+    let selected_id = match id {
+        WidgetGroupId::Codex => config.widget_visual.codex_material_group_id.as_deref(),
+        WidgetGroupId::Claude => config.widget_visual.claude_material_group_id.as_deref(),
+    }?;
+    let group = config
+        .widget_visual
+        .material_groups
+        .iter()
+        .find(|group| group.id == selected_id)?;
+
+    widget_image::get_material_group_images(group).ok()
+}
+
+fn draw_material_lamps(
+    buffer: &mut PixelBuffer,
+    group: &GroupLayout,
+    material: &widget_image::MaterialGroupImages,
+    inactive_brightness_percent: u8,
+) {
+    let images = [&material.green, &material.yellow, &material.red];
+    let inactive_alpha = ((u16::from(inactive_brightness_percent.clamp(12, 80)) * 255) / 100) as u8;
+
+    for (index, lamp) in group.lights.iter().enumerate() {
+        let left = (lamp.center_x - lamp.radius).round() as i32;
+        let top = (lamp.center_y - lamp.radius).round() as i32;
+        widget_image::blit_material(buffer, left, top, images[index], inactive_alpha);
+
+        let active_alpha = group.render_state.lamps[index].alpha;
+        if active_alpha > 0 {
+            widget_image::blit_material(buffer, left, top, images[index], active_alpha);
         }
     }
 }
@@ -738,10 +784,12 @@ fn scale_color(color: Rgba, factor: f32) -> Rgba {
 mod tests {
     use super::*;
     use crate::{
-        app_config::AppConfig,
+        app_config::{AppConfig, MaterialGroup},
         ui_state::{AppStatusSnapshot, SourceVisualState},
         widget_effects::WidgetEffectsState,
     };
+    use image::{ImageBuffer, RgbaImage};
+    use std::{env, fs, path::Path};
 
     fn snapshot_with_state(state: SourceVisualState) -> AppStatusSnapshot {
         let mut snapshot = AppStatusSnapshot::empty();
@@ -961,5 +1009,58 @@ mod tests {
             has_visible_pixel(&frame, 0, 12, 22, 36),
             "logo should always render"
         );
+    }
+
+    fn write_material_png(path: &Path, color: [u8; 4]) {
+        let image: RgbaImage = ImageBuffer::from_pixel(4, 4, image::Rgba(color));
+        image.save(path).expect("material test PNG should save");
+    }
+
+    #[test]
+    fn custom_materials_preserve_state_alpha_and_replace_builtin_lamps() {
+        let root = env::temp_dir().join(format!(
+            "cc-traffic-light-render-material-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test directory should exist");
+        write_material_png(&root.join("green.png"), [0, 0, 255, 255]);
+        write_material_png(&root.join("yellow.png"), [255, 0, 255, 255]);
+        write_material_png(&root.join("red.png"), [0, 255, 255, 255]);
+
+        let group = MaterialGroup {
+            id: format!("render-test-{}", std::process::id()),
+            name: "Render test".to_string(),
+            green_path: root.join("green.png").display().to_string(),
+            yellow_path: root.join("yellow.png").display().to_string(),
+            red_path: root.join("red.png").display().to_string(),
+        };
+        let layout = single_group_layout(SourceVisualState::Working);
+        let frame = render_frame(GROUP_WIDTH, 32, SourceVisualState::Working, |config| {
+            config.monitoring.claude_enabled = false;
+            config.widget_visual.material_groups = vec![group.clone()];
+            config.widget_visual.codex_material_group_id = Some(group.id.clone());
+        });
+        let active = lamp_center(&layout, 0);
+        let inactive = lamp_center(&layout, 1);
+        let active_pixel = pixel_rgba(&frame, active.0, active.1);
+        let inactive_pixel = pixel_rgba(&frame, inactive.0, inactive.1);
+
+        assert!(
+            active_pixel.2 > active_pixel.0 && active_pixel.2 > active_pixel.1,
+            "active green slot should use the supplied blue test material: {active_pixel:?}"
+        );
+        assert!(
+            u16::from(inactive_pixel.0) + u16::from(inactive_pixel.1) + u16::from(inactive_pixel.2)
+                < u16::from(active_pixel.0) + u16::from(active_pixel.1) + u16::from(active_pixel.2),
+            "inactive material should remain dimmer than the active material"
+        );
+        assert_eq!(
+            frame.hot_zones.len(),
+            1,
+            "custom material keeps the group hot zone"
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 }

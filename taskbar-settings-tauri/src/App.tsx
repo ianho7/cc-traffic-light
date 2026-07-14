@@ -60,7 +60,10 @@ const VISIBLE_PAGE_IDS: SettingsPageId[] = [
   "about"
 ];
 
-function normalizeVisiblePage(page: SettingsPageId): SettingsPageId {
+function normalizeVisiblePage(page: SettingsPageId | "material_library"): SettingsPageId {
+  if (page === "material_library") {
+    return "appearance";
+  }
   return VISIBLE_PAGE_IDS.includes(page) ? page : "general";
 }
 
@@ -275,6 +278,9 @@ function App() {
               pending={pending}
               settings={settings}
               onSettingChange={updateConfig}
+              onSettingsSaved={(nextSettings) => {
+                setBootstrap((current) => current ? { ...current, settings: nextSettings } : current);
+              }}
             />
           ) : page === "about" ? (
             <AboutPage

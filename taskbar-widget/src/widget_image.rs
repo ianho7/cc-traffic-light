@@ -4,11 +4,21 @@
 //! (resources/logos/codex.png, claude.png) and decoded at first use
 //! via the `image` crate.
 
-use std::sync::OnceLock;
+use std::{
+    collections::HashMap,
+    fs,
+    sync::{Arc, Mutex, OnceLock},
+    time::SystemTime,
+};
 
-use image::load_from_memory;
+use image::{imageops::FilterType, load_from_memory};
 
-use crate::widget_render::{PixelBuffer, Rgba, WidgetGroupId};
+use crate::{
+    app_config::MaterialGroup,
+    widget_render::{PixelBuffer, Rgba, WidgetGroupId},
+};
+
+const MATERIAL_IMAGE_SIZE: u32 = 16;
 
 /// Decoded RGBA logo data ready for pixel-blit rendering.
 pub struct LogoData {
@@ -16,6 +26,44 @@ pub struct LogoData {
     pub height: u32,
     pub pixels: &'static [u8],
 }
+
+/// Decoded, taskbar-sized image data for one user-provided material slot.
+#[derive(Clone, Debug)]
+pub struct MaterialImageData {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<u8>,
+}
+
+/// The fixed green/yellow/red material set used by one widget group.
+#[derive(Clone, Debug)]
+pub struct MaterialGroupImages {
+    pub green: MaterialImageData,
+    pub yellow: MaterialImageData,
+    pub red: MaterialImageData,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MaterialFileStamp {
+    path: String,
+    modified: SystemTime,
+    len: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MaterialGroupStamp {
+    green: MaterialFileStamp,
+    yellow: MaterialFileStamp,
+    red: MaterialFileStamp,
+}
+
+struct CachedMaterialGroup {
+    stamp: MaterialGroupStamp,
+    images: Arc<MaterialGroupImages>,
+}
+
+static MATERIAL_GROUP_CACHE: OnceLock<Mutex<HashMap<String, CachedMaterialGroup>>> =
+    OnceLock::new();
 
 fn decode_logo(bytes: &[u8]) -> &'static LogoData {
     let img = load_from_memory(bytes).expect("Failed to decode logo PNG");
@@ -43,6 +91,81 @@ pub fn get_logo(id: WidgetGroupId) -> &'static LogoData {
             *LOGO.get_or_init(|| decode_logo(include_bytes!("../resources/claude.png")))
         }
     }
+}
+
+/// Load a material group from its three local PNG files.
+///
+/// Cached decoded pixels are reused until one of the source files changes.
+/// Returning an error intentionally makes the caller fall back to the built-in
+/// lamps, so a missing or corrupt user asset never breaks the widget.
+pub fn get_material_group_images(
+    group: &MaterialGroup,
+) -> Result<Arc<MaterialGroupImages>, String> {
+    let stamp = material_group_stamp(group)?;
+    let cache = MATERIAL_GROUP_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache
+        .lock()
+        .map_err(|_| "material image cache lock poisoned".to_string())?;
+
+    if let Some(cached) = cache.get(&group.id) {
+        if cached.stamp == stamp {
+            return Ok(Arc::clone(&cached.images));
+        }
+    }
+
+    let images = Arc::new(MaterialGroupImages {
+        green: decode_material_image(&group.green_path)?,
+        yellow: decode_material_image(&group.yellow_path)?,
+        red: decode_material_image(&group.red_path)?,
+    });
+    cache.insert(
+        group.id.clone(),
+        CachedMaterialGroup {
+            stamp,
+            images: Arc::clone(&images),
+        },
+    );
+    Ok(images)
+}
+
+fn material_group_stamp(group: &MaterialGroup) -> Result<MaterialGroupStamp, String> {
+    Ok(MaterialGroupStamp {
+        green: material_file_stamp(&group.green_path)?,
+        yellow: material_file_stamp(&group.yellow_path)?,
+        red: material_file_stamp(&group.red_path)?,
+    })
+}
+
+fn material_file_stamp(path: &str) -> Result<MaterialFileStamp, String> {
+    let metadata =
+        fs::metadata(path).map_err(|error| format!("cannot read material {path}: {error}"))?;
+    let modified = metadata
+        .modified()
+        .map_err(|error| format!("cannot inspect material {path}: {error}"))?;
+    Ok(MaterialFileStamp {
+        path: path.to_string(),
+        modified,
+        len: metadata.len(),
+    })
+}
+
+fn decode_material_image(path: &str) -> Result<MaterialImageData, String> {
+    let bytes = fs::read(path).map_err(|error| format!("cannot read material {path}: {error}"))?;
+    let image = load_from_memory(&bytes)
+        .map_err(|error| format!("cannot decode material {path}: {error}"))?
+        .to_rgba8();
+    let image = image::imageops::resize(
+        &image,
+        MATERIAL_IMAGE_SIZE,
+        MATERIAL_IMAGE_SIZE,
+        FilterType::Triangle,
+    );
+    let (width, height) = image.dimensions();
+    Ok(MaterialImageData {
+        width,
+        height,
+        pixels: image.into_raw(),
+    })
 }
 
 /// Blit a logo onto the pixel buffer at the given top-left position.
@@ -78,9 +201,50 @@ pub(crate) fn blit_logo(buffer: &mut PixelBuffer, left: i32, top: i32, logo: &Lo
     }
 }
 
+/// Alpha-blend a taskbar material image into the existing pixel buffer.
+pub(crate) fn blit_material(
+    buffer: &mut PixelBuffer,
+    left: i32,
+    top: i32,
+    image: &MaterialImageData,
+    opacity: u8,
+) {
+    let w = image.width as i32;
+    let h = image.height as i32;
+    let buf_w = buffer.width();
+    let buf_h = buffer.height();
+    let src_x_start = 0.max(-left);
+    let src_y_start = 0.max(-top);
+    let src_x_end = w.min(buf_w - left);
+    let src_y_end = h.min(buf_h - top);
+
+    for sy in src_y_start..src_y_end {
+        for sx in src_x_start..src_x_end {
+            let src_idx = ((sy as usize * image.width as usize) + sx as usize) * 4;
+            let alpha = ((u16::from(image.pixels[src_idx + 3]) * u16::from(opacity)) / 255) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            buffer.blend_pixel(
+                left + sx,
+                top + sy,
+                Rgba {
+                    red: image.pixels[src_idx],
+                    green: image.pixels[src_idx + 1],
+                    blue: image.pixels[src_idx + 2],
+                    alpha,
+                },
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{env, fs, path::Path};
+
+    use image::{ImageBuffer, RgbaImage};
 
     #[test]
     fn codex_logo_decodes_and_has_visible_pixels() {
@@ -100,5 +264,63 @@ mod tests {
         assert!(logo.height > 0);
         let non_zero = logo.pixels.iter().any(|&b| b != 0);
         assert!(non_zero, "claude logo should have non-zero pixel data");
+    }
+
+    fn write_test_png(path: &Path, width: u32, color: [u8; 4]) {
+        let image: RgbaImage = ImageBuffer::from_pixel(width, 4, image::Rgba(color));
+        image.save(path).expect("test PNG should save");
+    }
+
+    fn test_group(root: &Path) -> MaterialGroup {
+        MaterialGroup {
+            id: format!("test-{}", std::process::id()),
+            name: "Test".to_string(),
+            green_path: root.join("green.png").display().to_string(),
+            yellow_path: root.join("yellow.png").display().to_string(),
+            red_path: root.join("red.png").display().to_string(),
+        }
+    }
+
+    #[test]
+    fn material_group_decodes_to_fixed_taskbar_size_and_reloads_when_changed() {
+        let root =
+            env::temp_dir().join(format!("cc-traffic-light-material-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test directory should exist");
+        for (name, color) in [
+            ("green.png", [0, 255, 0, 255]),
+            ("yellow.png", [255, 255, 0, 255]),
+            ("red.png", [255, 0, 0, 255]),
+        ] {
+            write_test_png(&root.join(name), 4, color);
+        }
+        let group = test_group(&root);
+
+        let first = get_material_group_images(&group).expect("material group should decode");
+        assert_eq!(
+            (first.green.width, first.green.height),
+            (MATERIAL_IMAGE_SIZE, MATERIAL_IMAGE_SIZE)
+        );
+        assert_eq!(&first.green.pixels[..4], &[0, 255, 0, 255]);
+
+        write_test_png(&root.join("green.png"), 5, [0, 0, 255, 255]);
+        let second =
+            get_material_group_images(&group).expect("changed material group should decode");
+        assert_eq!(&second.green.pixels[..4], &[0, 0, 255, 255]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn missing_material_image_returns_error() {
+        let group = MaterialGroup {
+            id: "missing".to_string(),
+            name: "Missing".to_string(),
+            green_path: "C:/does-not-exist/green.png".to_string(),
+            yellow_path: "C:/does-not-exist/yellow.png".to_string(),
+            red_path: "C:/does-not-exist/red.png".to_string(),
+        };
+
+        assert!(get_material_group_images(&group).is_err());
     }
 }
