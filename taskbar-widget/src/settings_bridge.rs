@@ -3,7 +3,11 @@ use std::sync::{Mutex, OnceLock};
 use shared_core::{
     app_config::changed_keys,
     settings_service::{SettingsService, SettingsServiceError},
-    tauri_ipc::{HookStatus, HookStatusDto, SettingsSaveResultDto},
+    tauri_ipc::{
+        HookDiagnosticPathsDto, HookDiagnosticsDto, HookStatus, HookStatusDto,
+        RuntimeLogDiagnosticsDto,
+        SettingsSaveResultDto,
+    },
 };
 use taskbar_widget::{
     agent_state,
@@ -289,6 +293,82 @@ pub fn detect_hook_status() -> HookStatusDto {
     }
 }
 
+/// Return the filesystem locations managed by the global hook installers.
+/// This is deliberately read-only and mirrors the scripts' default locations.
+pub fn hook_diagnostics() -> HookDiagnosticsDto {
+    HookDiagnosticsDto {
+        codex: hook_diagnostic_paths("codex"),
+        claude: hook_diagnostic_paths("claude"),
+    }
+}
+
+pub fn runtime_log_diagnostics() -> RuntimeLogDiagnosticsDto {
+    let directory_path = win32::runtime_log_directory_path();
+    let runtime_log_path = win32::runtime_log_file_path();
+    RuntimeLogDiagnosticsDto {
+        directory_path: directory_path.display().to_string(),
+        runtime_log_exists: runtime_log_path.is_file(),
+        runtime_log_path: runtime_log_path.display().to_string(),
+    }
+}
+
+pub fn open_runtime_log_directory() -> Result<String, String> {
+    win32::open_runtime_log_directory().map(|path| path.display().to_string())
+}
+
+fn hook_diagnostic_paths(agent: &str) -> HookDiagnosticPathsDto {
+    let config_path = agent_hook_config_path(agent);
+    let backup_path = match agent {
+        "claude" => config_path.with_file_name("settings.json.cc-traffic-light-hooks.bak"),
+        _ => config_path.with_file_name("hooks.json.cc-traffic-light-global-hooks.bak"),
+    };
+    let hook_executable_path = hook_executable_path(agent);
+
+    HookDiagnosticPathsDto {
+        config_exists: config_path.is_file(),
+        config_path: config_path.display().to_string(),
+        backup_exists: backup_path.is_file(),
+        backup_path: backup_path.display().to_string(),
+        hook_executable_exists: hook_executable_path.is_file(),
+        hook_executable_path: hook_executable_path.display().to_string(),
+    }
+}
+
+fn agent_hook_config_path(agent: &str) -> std::path::PathBuf {
+    std::env::var_os("USERPROFILE")
+        .map(|p| {
+            let mut path = std::path::PathBuf::from(p);
+            match agent {
+                "claude" => path.extend([".claude", "settings.json"]),
+                _ => path.extend([".codex", "hooks.json"]),
+            }
+            path
+        })
+        .unwrap_or_else(|| match agent {
+            "claude" => std::path::PathBuf::from(".claude/settings.json"),
+            _ => std::path::PathBuf::from(".codex/hooks.json"),
+        })
+}
+
+fn hook_executable_path(agent: &str) -> std::path::PathBuf {
+    let script_path = get_install_script_path(agent);
+    let local_candidate = script_path
+        .parent()
+        .and_then(std::path::Path::parent)
+        .map(|directory| directory.join("taskbar_widget_hook.exe"));
+    if let Some(path) = local_candidate.filter(|path| path.is_file()) {
+        return path;
+    }
+
+    std::env::var_os("LOCALAPPDATA")
+        .map(|p| {
+            let mut path = std::path::PathBuf::from(p);
+            path.extend(["Programs", "CC Traffic Light", "taskbar_widget_hook.exe"]);
+            path
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("taskbar_widget_hook.exe"))
+}
+
 pub fn should_show_hook_notification(status: &HookStatusDto) -> bool {
     let all_ready =
         matches!(status.codex, HookStatus::Active) && matches!(status.claude, HookStatus::Active);
@@ -334,19 +414,7 @@ fn hook_notification_key(status: &HookStatusDto) -> Option<String> {
 }
 
 fn detect_agent_hook_status(agent: &str) -> HookStatus {
-    let hooks_path = std::env::var_os("USERPROFILE")
-        .map(|p| {
-            let mut path = std::path::PathBuf::from(p);
-            match agent {
-                "claude" => path.extend([".claude", "settings.json"]),
-                _ => path.extend([".codex", "hooks.json"]),
-            }
-            path
-        })
-        .unwrap_or_else(|| match agent {
-            "claude" => std::path::PathBuf::from(".claude/settings.json"),
-            _ => std::path::PathBuf::from(".codex/hooks.json"),
-        });
+    let hooks_path = agent_hook_config_path(agent);
 
     let hooks_text = std::fs::read_to_string(&hooks_path).ok();
     let hooks_invalid = hooks_text
@@ -490,7 +558,10 @@ fn uninstall_hooks(agent: &str, source_id: SourceId) -> (bool, String) {
         .output()
     {
         Ok(output) if output.status.success() => match agent_state::clear_agent_tasks(source_id) {
-            Ok(_) => (true, format!("{agent} hooks removed and historical state cleared")),
+            Ok(_) => (
+                true,
+                format!("{agent} hooks removed and historical state cleared"),
+            ),
             Err(error) => (
                 false,
                 format!("{agent} hooks removed, but state cleanup failed: {error}"),
@@ -504,9 +575,18 @@ fn uninstall_hooks(agent: &str, source_id: SourceId) -> (bool, String) {
             } else {
                 stderr.trim()
             };
-            (false, format!("{agent} hook removal failed (exit={}): {detail}", output.status))
+            (
+                false,
+                format!(
+                    "{agent} hook removal failed (exit={}): {detail}",
+                    output.status
+                ),
+            )
         }
-        Err(error) => (false, format!("failed to start {agent} hook uninstaller: {error}")),
+        Err(error) => (
+            false,
+            format!("failed to start {agent} hook uninstaller: {error}"),
+        ),
     }
 }
 
@@ -523,11 +603,7 @@ fn get_install_script_path(agent: &str) -> std::path::PathBuf {
     std::env::var_os("LOCALAPPDATA")
         .map(|p| {
             let mut path = std::path::PathBuf::from(p);
-            path.extend([
-                "Programs",
-                "CC Traffic Light",
-                "scripts",
-            ]);
+            path.extend(["Programs", "CC Traffic Light", "scripts"]);
             path.push(&script_name);
             path
         })

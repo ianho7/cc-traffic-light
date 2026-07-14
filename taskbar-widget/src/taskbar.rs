@@ -532,22 +532,6 @@ pub fn attach_to_taskbar(
         top_level_style_cleared,
     };
 
-    if win32::runtime_log_enabled() {
-        win32::runtime_debug_log(&format!(
-            "{} attach target_parent={} previous_parent={} current_parent={} api_ok={} verified={} layered_ok={} style_mode={} layered_mode={} residual_top_level_style_bits=0x{:X}",
-            win32::LIVE_DEBUG_PREFIX,
-            win32::format_hwnd(result.target_parent),
-            win32::format_hwnd(result.previous_parent),
-            win32::format_hwnd(result.current_parent),
-            result.set_parent_api_ok,
-            result.parent_relation_verified,
-            result.layered_ok,
-            config.style_mode.as_str(),
-            config.layered_mode.as_str(),
-            result.residual_top_level_style_bits
-        ));
-    }
-
     result
 }
 
@@ -682,21 +666,6 @@ pub fn position_in_taskbar(
         width,
         height,
     };
-
-    if win32::runtime_log_enabled() {
-        win32::runtime_debug_log(&format!(
-            "{} layout anchor={} parent_rect={} module_rect={} move_args=({}, {}, {}, {}) moved={}",
-            win32::LIVE_DEBUG_PREFIX,
-            win32::format_hwnd(result.anchor),
-            win32::format_rect(&result.parent_rect),
-            win32::format_rect(&result.module_rect),
-            result.x,
-            result.y,
-            result.width,
-            result.height,
-            result.moved
-        ));
-    }
 
     result
 }
@@ -894,25 +863,7 @@ pub fn log_layout(result: &TaskbarLayoutResult) {
 
 pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &DebugLoopConfig) {
     if !layout.attempted || !is_valid_window(hwnd) {
-        if win32::runtime_log_enabled() {
-            win32::runtime_debug_log(&format!(
-                "{} refresh skipped attempted={} hwnd_valid={}",
-                win32::LIVE_DEBUG_PREFIX,
-                layout.attempted,
-                is_valid_window(hwnd)
-            ));
-        }
         return;
-    }
-
-    if win32::runtime_log_enabled() {
-        win32::runtime_debug_log(&format!(
-            "{} refresh start mode={} hwnd={} module_rect={}",
-            win32::LIVE_DEBUG_PREFIX,
-            config.refresh_mode.as_str(),
-            win32::format_hwnd(hwnd),
-            win32::format_rect(&layout.module_rect)
-        ));
     }
 
     match config.refresh_mode {
@@ -928,16 +879,6 @@ pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &Deb
                     "[taskbar-loop] refresh redraw attempt={} moved={} invalidated={} updated={}",
                     attempt, moved, invalidated, updated
                 ));
-                if win32::runtime_log_enabled() {
-                    win32::runtime_debug_log(&format!(
-                        "{} refresh redraw attempt={} moved={} invalidated={} updated={}",
-                        win32::LIVE_DEBUG_PREFIX,
-                        attempt,
-                        moved,
-                        invalidated,
-                        updated
-                    ));
-                }
                 if attempt < 3 {
                     thread::sleep(Duration::from_millis(500));
                 }
@@ -963,16 +904,6 @@ pub fn refresh_visibility(hwnd: HWND, layout: &TaskbarLayoutResult, config: &Deb
                     "[taskbar-loop] refresh topmost_pulse attempt={} positioned={} invalidated={} updated={}",
                     attempt, positioned, invalidated, updated
                 ));
-                if win32::runtime_log_enabled() {
-                    win32::runtime_debug_log(&format!(
-                        "{} refresh topmost_pulse attempt={} positioned={} invalidated={} updated={}",
-                        win32::LIVE_DEBUG_PREFIX,
-                        attempt,
-                        positioned,
-                        invalidated,
-                        updated
-                    ));
-                }
                 if attempt < 3 {
                     thread::sleep(Duration::from_millis(500));
                 }

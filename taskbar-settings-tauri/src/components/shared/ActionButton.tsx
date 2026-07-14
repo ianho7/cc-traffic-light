@@ -1,26 +1,32 @@
-import type { ReactNode } from "react";
+import type { MouseEventHandler, ReactNode } from "react";
 
 interface ActionButtonProps {
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
   children: ReactNode;
+  variant?: "primary" | "secondary" | "danger";
+  size?: "default" | "compact";
+  className?: string;
+  ariaLabel?: string;
 }
 
 /** V2-style action button: border + paper background */
-export default function ActionButton({ onClick, disabled, children }: ActionButtonProps) {
+export default function ActionButton({
+  onClick,
+  disabled,
+  children,
+  variant = "primary",
+  size = "default",
+  className = "",
+  ariaLabel
+}: ActionButtonProps) {
   return (
     <button
-      className="action-button"
+      className={`action-button action-button--${variant} action-button--${size}${className ? ` ${className}` : ""}`}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={onClick}
       type="button"
-      style={{
-        border: "1px solid var(--line, #deded8)",
-        background: "var(--paper, #fffefa)",
-        padding: "12px 24px",
-        font: "700 12px var(--mono)",
-        cursor: disabled ? "not-allowed" : "pointer",
-      }}
     >
       {children}
     </button>

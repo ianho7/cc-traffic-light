@@ -1,22 +1,26 @@
 use std::{
     env,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
 use shared_core::{
-    app_config::{changed_keys, config_file_path, default_widget_palette, AppConfig},
+    app_config::{AppConfig, changed_keys, config_file_path, default_widget_palette},
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
-        HookStatusDto, SettingsAboutMetadataDto, SettingsBootstrapDto, SettingsIpcCommand,
-        SettingsIpcEnvelope, SettingsIpcResponse, SettingsIpcResponseEnvelope,
-        SettingsRefreshResultDto, SettingsSaveResultDto, SettingsTransportDto,
-        TAURI_SETTINGS_PIPE_NAME, TAURI_SETTINGS_PROTOCOL_VERSION,
+        HookDiagnosticPathsDto, HookDiagnosticsDto, HookStatusDto, RuntimeLogDiagnosticsDto,
+        SettingsAboutMetadataDto,
+        SettingsBootstrapDto, SettingsIpcCommand, SettingsIpcEnvelope, SettingsIpcResponse,
+        SettingsIpcResponseEnvelope, SettingsRefreshResultDto, SettingsSaveResultDto,
+        SettingsTransportDto, TAURI_SETTINGS_PIPE_NAME, TAURI_SETTINGS_PROTOCOL_VERSION,
     },
 };
-use windows::{core::PCWSTR, Win32::System::Pipes::{CallNamedPipeW, WaitNamedPipeW}};
+use windows::{
+    Win32::System::Pipes::{CallNamedPipeW, WaitNamedPipeW},
+    core::PCWSTR,
+};
 
 #[derive(Clone)]
 struct FakeBackendState {
@@ -71,6 +75,39 @@ fn fake_snapshot() -> StatusSnapshotView {
     }
 }
 
+fn fake_hook_diagnostics() -> HookDiagnosticsDto {
+    HookDiagnosticsDto {
+        codex: HookDiagnosticPathsDto {
+            config_path: r"C:\Users\fake\.codex\hooks.json".to_string(),
+            config_exists: true,
+            backup_path: r"C:\Users\fake\.codex\hooks.json.cc-traffic-light-global-hooks.bak"
+                .to_string(),
+            backup_exists: true,
+            hook_executable_path: r"C:\Program Files\CC Traffic Light\taskbar_widget_hook.exe"
+                .to_string(),
+            hook_executable_exists: true,
+        },
+        claude: HookDiagnosticPathsDto {
+            config_path: r"C:\Users\fake\.claude\settings.json".to_string(),
+            config_exists: true,
+            backup_path: r"C:\Users\fake\.claude\settings.json.cc-traffic-light-hooks.bak"
+                .to_string(),
+            backup_exists: false,
+            hook_executable_path: r"C:\Program Files\CC Traffic Light\taskbar_widget_hook.exe"
+                .to_string(),
+            hook_executable_exists: true,
+        },
+    }
+}
+
+fn fake_runtime_log_diagnostics() -> RuntimeLogDiagnosticsDto {
+    RuntimeLogDiagnosticsDto {
+        directory_path: r"C:\Users\fake\AppData\Local\CC Traffic Light\logs".to_string(),
+        runtime_log_path: r"C:\Users\fake\AppData\Local\CC Traffic Light\logs\runtime.log".to_string(),
+        runtime_log_exists: true,
+    }
+}
+
 fn about_metadata() -> SettingsAboutMetadataDto {
     SettingsAboutMetadataDto {
         product_name: "CC Traffic Light".to_string(),
@@ -103,8 +140,7 @@ fn call_pipe(command: SettingsIpcCommand) -> Result<SettingsIpcResponse, String>
         command,
     };
     let request_id = envelope.request_id.clone();
-    let payload = serde_json::to_vec(&envelope)
-        .map_err(|e| e.to_string())?;
+    let payload = serde_json::to_vec(&envelope).map_err(|e| e.to_string())?;
     let pipe_name = wide_null(TAURI_SETTINGS_PIPE_NAME);
     let _ = unsafe { WaitNamedPipeW(PCWSTR(pipe_name.as_ptr()), 150) };
 
@@ -149,7 +185,9 @@ fn call_or_fake<T>(
             pipe_error, FAKE_BACKEND_ENV
         )),
         Err(_) => {
-            let mut guard = state().lock().map_err(|_| "fake state lock poisoned".to_string())?;
+            let mut guard = state()
+                .lock()
+                .map_err(|_| "fake state lock poisoned".to_string())?;
             fake_fallback(&mut guard)
         }
     }
@@ -157,9 +195,13 @@ fn call_or_fake<T>(
 
 #[tauri::command]
 fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
-    if let (Ok(SettingsIpcResponse::GetSnapshot { snapshot }), Ok(SettingsIpcResponse::GetSettings { settings })) =
-        (call_pipe(SettingsIpcCommand::GetSnapshot), call_pipe(SettingsIpcCommand::GetSettings))
-    {
+    if let (
+        Ok(SettingsIpcResponse::GetSnapshot { snapshot }),
+        Ok(SettingsIpcResponse::GetSettings { settings }),
+    ) = (
+        call_pipe(SettingsIpcCommand::GetSnapshot),
+        call_pipe(SettingsIpcCommand::GetSettings),
+    ) {
         return Ok(SettingsBootstrapDto {
             protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
             transport: SettingsTransportDto {
@@ -189,7 +231,9 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
         ));
     }
 
-    let guard = state().lock().map_err(|_| "fake state lock poisoned".to_string())?;
+    let guard = state()
+        .lock()
+        .map_err(|_| "fake state lock poisoned".to_string())?;
     Ok(SettingsBootstrapDto {
         protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
         transport: SettingsTransportDto {
@@ -277,9 +321,7 @@ fn request_refresh() -> Result<SettingsRefreshResultDto, String> {
 }
 
 #[tauri::command]
-fn notify_settings_applied(
-    applied_keys: Vec<String>,
-) -> Result<(), String> {
+fn notify_settings_applied(applied_keys: Vec<String>) -> Result<(), String> {
     call_or_fake(
         SettingsIpcCommand::NotifySettingsApplied {
             applied_keys: applied_keys.clone(),
@@ -312,6 +354,45 @@ fn get_hook_status() -> Result<HookStatusDto, String> {
 }
 
 #[tauri::command]
+fn get_hook_diagnostics() -> Result<HookDiagnosticsDto, String> {
+    call_or_fake(
+        SettingsIpcCommand::GetHookDiagnostics,
+        |response| match response {
+            SettingsIpcResponse::GetHookDiagnostics { diagnostics } => Ok(diagnostics),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected get_hook_diagnostics response".to_string()),
+        },
+        |_guard| Ok(fake_hook_diagnostics()),
+    )
+}
+
+#[tauri::command]
+fn get_runtime_log_diagnostics() -> Result<RuntimeLogDiagnosticsDto, String> {
+    call_or_fake(
+        SettingsIpcCommand::GetRuntimeLogDiagnostics,
+        |response| match response {
+            SettingsIpcResponse::GetRuntimeLogDiagnostics { diagnostics } => Ok(diagnostics),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected get_runtime_log_diagnostics response".to_string()),
+        },
+        |_guard| Ok(fake_runtime_log_diagnostics()),
+    )
+}
+
+#[tauri::command]
+fn open_runtime_log_directory() -> Result<String, String> {
+    call_or_fake(
+        SettingsIpcCommand::OpenRuntimeLogDirectory,
+        |response| match response {
+            SettingsIpcResponse::OpenRuntimeLogDirectory { directory_path } => Ok(directory_path),
+            SettingsIpcResponse::Error { message } => Err(message),
+            _ => Err("unexpected open_runtime_log_directory response".to_string()),
+        },
+        |_guard| Ok(fake_runtime_log_diagnostics().directory_path),
+    )
+}
+
+#[tauri::command]
 fn install_codex_hooks() -> Result<String, String> {
     call_or_fake(
         SettingsIpcCommand::InstallCodexHooks,
@@ -326,9 +407,7 @@ fn install_codex_hooks() -> Result<String, String> {
             SettingsIpcResponse::Error { message } => Err(message),
             _ => Err("unexpected install_codex_hooks response".to_string()),
         },
-        |_guard| {
-            Err("cannot install hooks in fake backend mode".to_string())
-        },
+        |_guard| Err("cannot install hooks in fake backend mode".to_string()),
     )
 }
 
@@ -338,7 +417,11 @@ fn install_claude_hooks() -> Result<String, String> {
         SettingsIpcCommand::InstallClaudeHooks,
         |response| match response {
             SettingsIpcResponse::InstallClaudeHooks { success, message } => {
-                if success { Ok(message) } else { Err(message) }
+                if success {
+                    Ok(message)
+                } else {
+                    Err(message)
+                }
             }
             SettingsIpcResponse::Error { message } => Err(message),
             _ => Err("unexpected install_claude_hooks response".to_string()),
@@ -353,7 +436,11 @@ fn uninstall_codex_hooks() -> Result<String, String> {
         SettingsIpcCommand::UninstallCodexHooks,
         |response| match response {
             SettingsIpcResponse::UninstallCodexHooks { success, message } => {
-                if success { Ok(message) } else { Err(message) }
+                if success {
+                    Ok(message)
+                } else {
+                    Err(message)
+                }
             }
             SettingsIpcResponse::Error { message } => Err(message),
             _ => Err("unexpected uninstall_codex_hooks response".to_string()),
@@ -368,7 +455,11 @@ fn uninstall_claude_hooks() -> Result<String, String> {
         SettingsIpcCommand::UninstallClaudeHooks,
         |response| match response {
             SettingsIpcResponse::UninstallClaudeHooks { success, message } => {
-                if success { Ok(message) } else { Err(message) }
+                if success {
+                    Ok(message)
+                } else {
+                    Err(message)
+                }
             }
             SettingsIpcResponse::Error { message } => Err(message),
             _ => Err("unexpected uninstall_claude_hooks response".to_string()),
@@ -388,6 +479,9 @@ pub fn run() {
             request_refresh,
             notify_settings_applied,
             get_hook_status,
+            get_hook_diagnostics,
+            get_runtime_log_diagnostics,
+            open_runtime_log_directory,
             install_codex_hooks,
             install_claude_hooks,
             uninstall_codex_hooks,

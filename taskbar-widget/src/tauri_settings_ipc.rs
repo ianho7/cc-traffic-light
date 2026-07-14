@@ -1,4 +1,7 @@
-use std::{sync::OnceLock, thread};
+use std::{
+    sync::{Mutex, OnceLock},
+    thread,
+};
 
 use shared_core::{
     settings_service::StatusSnapshotView,
@@ -25,6 +28,7 @@ use crate::{settings_bridge, win32};
 
 const PIPE_BUFFER_SIZE: u32 = 64 * 1024;
 static IPC_SERVER_STARTED: OnceLock<()> = OnceLock::new();
+static LAST_IPC_SERVER_ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 pub fn ensure_server_started() {
     let _ = IPC_SERVER_STARTED.get_or_init(|| {
@@ -36,9 +40,31 @@ pub fn ensure_server_started() {
 
 fn server_loop() {
     loop {
-        if let Err(error) = serve_once() {
-            win32::runtime_debug_log(&format!("[tauri-ipc] serve_once error={error}"));
+        match serve_once() {
+            Ok(()) => clear_last_server_error(),
+            Err(error) => log_server_error_if_changed(error),
         }
+    }
+}
+
+fn log_server_error_if_changed(error: String) {
+    let lock = LAST_IPC_SERVER_ERROR.get_or_init(|| Mutex::new(None));
+    let Ok(mut last_error) = lock.lock() else {
+        win32::runtime_debug_log(&format!("[tauri-ipc] serve_once error={error}"));
+        return;
+    };
+    if last_error.as_deref() == Some(error.as_str()) {
+        return;
+    }
+    *last_error = Some(error.clone());
+    win32::runtime_debug_log(&format!("[tauri-ipc] serve_once error={error}"));
+}
+
+fn clear_last_server_error() {
+    if let Some(lock) = LAST_IPC_SERVER_ERROR.get()
+        && let Ok(mut last_error) = lock.lock()
+    {
+        *last_error = None;
     }
 }
 
@@ -174,6 +200,22 @@ fn handle_request(request_bytes: &[u8]) -> SettingsIpcResponseEnvelope {
                 SettingsIpcCommand::GetHookStatus => {
                     let status = settings_bridge::detect_hook_status();
                     SettingsIpcResponse::GetHookStatus { status }
+                }
+                SettingsIpcCommand::GetHookDiagnostics => {
+                    let diagnostics = settings_bridge::hook_diagnostics();
+                    SettingsIpcResponse::GetHookDiagnostics { diagnostics }
+                }
+                SettingsIpcCommand::GetRuntimeLogDiagnostics => {
+                    let diagnostics = settings_bridge::runtime_log_diagnostics();
+                    SettingsIpcResponse::GetRuntimeLogDiagnostics { diagnostics }
+                }
+                SettingsIpcCommand::OpenRuntimeLogDirectory => {
+                    match settings_bridge::open_runtime_log_directory() {
+                        Ok(directory_path) => SettingsIpcResponse::OpenRuntimeLogDirectory {
+                            directory_path,
+                        },
+                        Err(error) => return response_error(request.request_id, error),
+                    }
                 }
                 SettingsIpcCommand::InstallCodexHooks => {
                     let (success, message) = settings_bridge::install_codex_hooks();

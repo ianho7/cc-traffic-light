@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfig,
+  HookDiagnosticsDto,
   HookStatusDto,
+  RuntimeLogDiagnosticsDto,
   SettingsBootstrapDto,
   SettingsRefreshResultDto,
   SettingsSaveResultDto,
@@ -34,6 +36,18 @@ export function notifySettingsApplied(appliedKeys: string[]): Promise<void> {
 
 export function getHookStatus(): Promise<HookStatusDto> {
   return invoke("get_hook_status");
+}
+
+export function getHookDiagnostics(): Promise<HookDiagnosticsDto> {
+  return invoke("get_hook_diagnostics");
+}
+
+export function getRuntimeLogDiagnostics(): Promise<RuntimeLogDiagnosticsDto> {
+  return invoke("get_runtime_log_diagnostics");
+}
+
+export function openRuntimeLogDirectory(): Promise<string> {
+  return invoke("open_runtime_log_directory");
 }
 
 export function installCodexHooks(): Promise<string> {

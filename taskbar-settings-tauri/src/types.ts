@@ -106,3 +106,23 @@ export interface HookStatusDto {
   codex: HookStatus;
   claude: HookStatus;
 }
+
+export interface HookDiagnosticPathsDto {
+  config_path: string;
+  config_exists: boolean;
+  backup_path: string;
+  backup_exists: boolean;
+  hook_executable_path: string;
+  hook_executable_exists: boolean;
+}
+
+export interface HookDiagnosticsDto {
+  codex: HookDiagnosticPathsDto;
+  claude: HookDiagnosticPathsDto;
+}
+
+export interface RuntimeLogDiagnosticsDto {
+  directory_path: string;
+  runtime_log_path: string;
+  runtime_log_exists: boolean;
+}

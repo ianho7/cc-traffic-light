@@ -60,12 +60,13 @@ struct PaintState {
     hot_zones: Vec<WidgetHotZone>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct WidgetRuntimeState {
     mount_state: WidgetMountState,
     last_attach_at: Option<u64>,
     last_retry_at: Option<u64>,
     tray_registered: bool,
+    last_tray_error: Option<String>,
 }
 
 static PAINT_STATE: OnceLock<Mutex<PaintState>> = OnceLock::new();
@@ -451,22 +452,6 @@ fn poll_hook_state(hwnd: HWND) {
     let (mount_state, last_attach_at) = current_widget_runtime_state();
     let next_snapshot =
         detector::build_status_snapshot(&config, &result, mount_state, last_attach_at);
-    runtime_log(&format!(
-        "WM_TIMER tick load_status={} path={} overall={} codex={} claude={}",
-        result.outcome.as_str(),
-        result.path.display(),
-        next_snapshot.overall_state.as_str(),
-        next_snapshot
-            .sources
-            .get("codex")
-            .map(|source| source.state.as_str())
-            .unwrap_or("idle"),
-        next_snapshot
-            .sources
-            .get("claude")
-            .map(|source| source.state.as_str())
-            .unwrap_or("idle")
-    ));
     let Some(lock) = PAINT_STATE.get() else {
         return;
     };
@@ -514,10 +499,6 @@ fn poll_hook_state(hwnd: HWND) {
         current
             .effects
             .sync_snapshot(&next_snapshot, widget_effects::now_ms());
-        runtime_log(&format!(
-            "snapshot unchanged overall={}",
-            next_snapshot.overall_state.as_str()
-        ));
     }
 
     if let Some(snapshot_lock) = APP_STATUS_SNAPSHOT.get()
@@ -601,12 +582,6 @@ fn paint_window(hwnd: HWND) -> LRESULT {
                 .map(|state| (state.snapshot.clone(), state.effects.clone()))
         })
         .unwrap_or_else(|| (AppStatusSnapshot::empty(), WidgetEffectsState::default()));
-    runtime_log(&format!(
-        "WM_PAINT enter hwnd={} overall={}",
-        win32::format_hwnd(hwnd),
-        snapshot.0.overall_state.as_str()
-    ));
-
     unsafe {
         let _ = BeginPaint(hwnd, &mut paint);
         let _ = GetClientRect(hwnd, &mut client_rect);
@@ -628,11 +603,6 @@ fn paint_window(hwnd: HWND) -> LRESULT {
         let _ = EndPaint(hwnd, &paint);
     }
 
-    runtime_log(&format!(
-        "WM_PAINT exit hwnd={} overall={}",
-        win32::format_hwnd(hwnd),
-        snapshot.0.overall_state.as_str()
-    ));
     LRESULT(0)
 }
 
@@ -691,8 +661,44 @@ fn runtime_log(message: &str) {
 
 fn display_snapshot_changed(current: &AppStatusSnapshot, next: &AppStatusSnapshot) -> bool {
     current.overall_state != next.overall_state
+        || current.widget_mount_state != next.widget_mount_state
         || current.last_error_summary != next.last_error_summary
-        || current.sources != next.sources
+        || current.sources.len() != next.sources.len()
+        || current.sources.iter().any(|(source_id, current_source)| {
+            next.sources
+                .get(source_id)
+                .is_none_or(|next_source| current_source.state != next_source.state)
+        })
+}
+
+#[cfg(test)]
+mod display_snapshot_tests {
+    use super::*;
+    use taskbar_widget::ui_state::SourceVisualState;
+
+    #[test]
+    fn ignores_source_refresh_timestamp_when_visual_state_is_unchanged() {
+        let current = AppStatusSnapshot::empty();
+        let mut next = current.clone();
+        next.sources
+            .get_mut("codex")
+            .expect("default Codex source")
+            .updated_at = 2;
+
+        assert!(!display_snapshot_changed(&current, &next));
+    }
+
+    #[test]
+    fn detects_source_visual_state_change() {
+        let current = AppStatusSnapshot::empty();
+        let mut next = current.clone();
+        next.sources
+            .get_mut("codex")
+            .expect("default Codex source")
+            .state = SourceVisualState::Working;
+
+        assert!(display_snapshot_changed(&current, &next));
+    }
 }
 
 fn handle_hit_test(hwnd: HWND, lparam: LPARAM) -> LRESULT {
@@ -817,6 +823,7 @@ fn initialize_widget_runtime_state(mount_state: WidgetMountState) {
         last_attach_at: (mount_state == WidgetMountState::Attached).then_some(now),
         last_retry_at: None,
         tray_registered: false,
+        last_tray_error: None,
     };
     let _ = WIDGET_RUNTIME_STATE.set(Mutex::new(state));
 }
@@ -944,16 +951,36 @@ fn ensure_tray_icon(hwnd: HWND) {
 
     match tray_icon::add_tray_icon(hwnd, &settings_bridge::current_config()) {
         Ok(()) => {
-            set_tray_registered(true);
+            if let Some(lock) = WIDGET_RUNTIME_STATE.get()
+                && let Ok(mut state) = lock.lock()
+            {
+                state.tray_registered = true;
+                state.last_tray_error = None;
+            }
             runtime_log(&format!(
                 "tray icon registered hwnd={} during recovery",
                 win32::format_hwnd(hwnd)
             ));
         }
-        Err(error) => runtime_log(&format!(
-            "tray icon registration pending hwnd={} error={error}",
-            win32::format_hwnd(hwnd)
-        )),
+        Err(error) => {
+            let error = error.to_string();
+            let changed = WIDGET_RUNTIME_STATE
+                .get()
+                .and_then(|lock| {
+                    lock.lock().ok().map(|mut state| {
+                        let changed = state.last_tray_error.as_deref() != Some(error.as_str());
+                        state.last_tray_error = Some(error.clone());
+                        changed
+                    })
+                })
+                .unwrap_or(true);
+            if changed {
+                runtime_log(&format!(
+                    "tray icon registration pending hwnd={} error={error}",
+                    win32::format_hwnd(hwnd)
+                ));
+            }
+        }
     }
 }
 

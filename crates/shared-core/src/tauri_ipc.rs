@@ -79,6 +79,29 @@ pub struct HookStatusDto {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HookDiagnosticPathsDto {
+    pub config_path: String,
+    pub config_exists: bool,
+    pub backup_path: String,
+    pub backup_exists: bool,
+    pub hook_executable_path: String,
+    pub hook_executable_exists: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HookDiagnosticsDto {
+    pub codex: HookDiagnosticPathsDto,
+    pub claude: HookDiagnosticPathsDto,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeLogDiagnosticsDto {
+    pub directory_path: String,
+    pub runtime_log_path: String,
+    pub runtime_log_exists: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SettingsIpcCommand {
     #[serde(rename = "get_snapshot")]
     GetSnapshot,
@@ -92,6 +115,12 @@ pub enum SettingsIpcCommand {
     NotifySettingsApplied { applied_keys: Vec<String> },
     #[serde(rename = "get_hook_status")]
     GetHookStatus,
+    #[serde(rename = "get_hook_diagnostics")]
+    GetHookDiagnostics,
+    #[serde(rename = "get_runtime_log_diagnostics")]
+    GetRuntimeLogDiagnostics,
+    #[serde(rename = "open_runtime_log_directory")]
+    OpenRuntimeLogDirectory,
     #[serde(rename = "install_codex_hooks")]
     InstallCodexHooks,
     #[serde(rename = "install_claude_hooks")]
@@ -123,6 +152,12 @@ pub enum SettingsIpcResponse {
     NotifySettingsApplied { acknowledged: bool },
     #[serde(rename = "get_hook_status")]
     GetHookStatus { status: HookStatusDto },
+    #[serde(rename = "get_hook_diagnostics")]
+    GetHookDiagnostics { diagnostics: HookDiagnosticsDto },
+    #[serde(rename = "get_runtime_log_diagnostics")]
+    GetRuntimeLogDiagnostics { diagnostics: RuntimeLogDiagnosticsDto },
+    #[serde(rename = "open_runtime_log_directory")]
+    OpenRuntimeLogDirectory { directory_path: String },
     #[serde(rename = "install_codex_hooks")]
     InstallCodexHooks { success: bool, message: String },
     #[serde(rename = "install_claude_hooks")]

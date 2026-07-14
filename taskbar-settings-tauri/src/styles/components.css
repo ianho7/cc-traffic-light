@@ -51,3 +51,318 @@
   padding: 8px 12px;
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
 }
+
+/* ── Action Button ── */
+.action-button {
+  border: 1px solid var(--ink, #151515);
+  background: var(--ink, #151515);
+  color: var(--paper, #fffefa);
+  padding: 12px 24px;
+  font: 700 12px var(--mono, ui-monospace, Consolas, monospace);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.action-button--compact {
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
+.action-button--secondary {
+  border-color: var(--line, #deded8);
+  background: var(--paper, #fffefa);
+  color: var(--ink, #151515);
+}
+
+.action-button--danger {
+  border-color: var(--red, #ff3b30);
+  background: var(--paper, #fffefa);
+  color: #b42318;
+}
+
+.action-button:hover:not(:disabled) {
+  background: var(--ink, #151515);
+  color: var(--paper, #fffefa);
+}
+
+.action-button--danger:hover:not(:disabled) {
+  background: var(--red, #ff3b30);
+  color: #fff;
+}
+
+.action-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.action-button:focus-visible {
+  outline: 2px solid var(--ink, #151515);
+  outline-offset: 2px;
+}
+
+/* ── Hook Management ── */
+.hook-management-panel {
+  margin-top: 24px;
+}
+
+.hook-management-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.hook-management-panel h2 {
+  margin: 6px 0 4px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.hook-management-panel__header p,
+.hook-management-panel__note,
+.hook-management-row__description {
+  margin: 0;
+  color: var(--muted, #777);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hook-management-panel__rows {
+  display: grid;
+}
+
+.hook-management-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) auto minmax(180px, 1.3fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.hook-management-row__source {
+  display: grid;
+  gap: 4px;
+}
+
+.hook-management-row__source strong {
+  font-size: 14px;
+}
+
+.hook-management-row__source code {
+  color: var(--muted, #777);
+  font: 11px var(--mono, ui-monospace, Consolas, monospace);
+}
+
+.hook-management-row__actions,
+.hook-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hook-management-feedback {
+  margin: 16px 16px 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line, #deded8);
+  background: var(--bg-note, #fafaf7);
+  color: var(--ink, #151515);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hook-management-feedback--success { border-left-color: var(--green, #34c759); }
+.hook-management-feedback--error { border-left-color: var(--red, #ff3b30); }
+.hook-management-panel__note { padding: 12px 16px 16px; }
+
+/* ── Monitoring Diagnostics ── */
+.monitoring-diagnostics-panel {
+  margin-top: 16px;
+}
+
+.monitoring-diagnostics-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-diagnostics-panel h2 {
+  margin: 6px 0 4px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.monitoring-diagnostics-panel__header p {
+  margin: 0;
+  color: var(--muted, #777);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.monitoring-diagnostics-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-diagnostics-summary > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-diagnostics-summary > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.monitoring-diagnostics-summary > div:nth-child(odd) {
+  border-right: 1px solid var(--line, #deded8);
+}
+
+.monitoring-diagnostics-summary span,
+.monitoring-path-row > span:first-child {
+  color: var(--muted, #777);
+  font: 700 10px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.monitoring-diagnostics-summary strong,
+.monitoring-diagnostics-summary code {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitoring-diagnostics-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-diagnostics-section:last-child { border-bottom: 0; }
+
+.monitoring-diagnostics-section h3 {
+  margin: 0 0 10px;
+  font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.monitoring-diagnostics-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.monitoring-path-group + .monitoring-path-group { margin-top: 16px; }
+.monitoring-path-group > strong { display: block; margin-bottom: 8px; font-size: 13px; }
+.monitoring-path-group__rows { border: 1px solid var(--line, #deded8); }
+
+.monitoring-path-row {
+  display: grid;
+  grid-template-columns: 122px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-path-row:last-child { border-bottom: 0; }
+.monitoring-path-row code {
+  overflow: hidden;
+  color: var(--ink, #151515);
+  font: 11px var(--mono, ui-monospace, Consolas, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitoring-path-row__availability { min-width: 0; color: var(--green, #34c759); font-size: 11px; }
+.monitoring-path-row__availability--unavailable { color: #b42318; }
+.monitoring-path-group__missing { color: var(--muted, #777); font-size: 12px; }
+
+/* ── Hook Action Dialog ── */
+.hook-dialog-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(21 21 21 / 0.22);
+  animation: hook-overlay-in 140ms ease-out both;
+}
+
+.hook-dialog {
+  width: min(100%, 480px);
+  border: 1px solid var(--ink, #151515);
+  background: var(--paper, #fffefa);
+  padding: 20px;
+  animation: hook-dialog-in 140ms ease-out both;
+}
+
+.hook-dialog__eyebrow {
+  color: var(--muted, #777);
+  font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.14em;
+}
+
+.hook-dialog h2 {
+  margin: 12px 0 8px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.hook-dialog p {
+  margin: 0;
+  color: var(--muted, #777);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hook-dialog__actions { margin-top: 24px; }
+
+@keyframes hook-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hook-dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 760px) {
+  .hook-management-panel__header,
+  .hook-management-row {
+    display: grid;
+  }
+
+  .hook-management-panel__header { gap: 12px; }
+  .hook-management-panel__header .action-button { justify-self: start; }
+  .monitoring-diagnostics-panel__header { display: grid; gap: 12px; }
+  .monitoring-diagnostics-panel__actions { justify-content: flex-start; }
+  .hook-management-row { grid-template-columns: 1fr auto; gap: 10px 12px; }
+  .hook-management-row__description { grid-column: 1 / -1; }
+  .hook-management-row__actions { grid-column: 1 / -1; justify-content: stretch; }
+  .hook-management-row__actions .action-button { flex: 1 1 0; }
+  .monitoring-diagnostics-summary { grid-template-columns: 1fr; }
+  .monitoring-diagnostics-summary > div,
+  .monitoring-diagnostics-summary > div:nth-last-child(-n + 2) { border-bottom: 1px solid var(--line, #deded8); }
+  .monitoring-diagnostics-summary > div:last-child { border-bottom: 0; }
+  .monitoring-diagnostics-summary > div:nth-child(odd) { border-right: 0; }
+  .monitoring-path-row { grid-template-columns: 1fr auto; }
+  .monitoring-path-row code { grid-column: 1 / -1; }
+  .monitoring-path-row__availability { justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hook-dialog-overlay,
+  .hook-dialog { animation: none; }
+  .action-button:active:not(:disabled) { transform: none; }
+}

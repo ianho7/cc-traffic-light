@@ -23,8 +23,9 @@ use windows::Win32::{
 
 pub const LIVE_DEBUG_PREFIX: &str = "[DEBUG-LIVE-01]";
 pub const RUNTIME_LOG_ENV: &str = "TASKBAR_MVP_RUNTIME_LOG_FILE";
+const RUNTIME_LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
 
-static RUNTIME_LOG_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+static RUNTIME_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static RUNTIME_LOG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub fn debug_log(message: &str) {
@@ -32,9 +33,7 @@ pub fn debug_log(message: &str) {
 }
 
 pub fn init_runtime_log() {
-    let Some(path) = runtime_log_path() else {
-        return;
-    };
+    let path = runtime_log_path();
 
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -47,7 +46,28 @@ pub fn init_runtime_log() {
 }
 
 pub fn runtime_log_enabled() -> bool {
-    runtime_log_path().is_some()
+    true
+}
+
+pub fn runtime_log_file_path() -> PathBuf {
+    runtime_log_path().clone()
+}
+
+pub fn runtime_log_directory_path() -> PathBuf {
+    runtime_log_path()
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+pub fn open_runtime_log_directory() -> Result<PathBuf, String> {
+    let directory = runtime_log_directory_path();
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    std::process::Command::new("explorer.exe")
+        .arg(&directory)
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    Ok(directory)
 }
 
 pub fn runtime_debug_log(message: &str) {
@@ -175,25 +195,49 @@ pub fn log_window(label: &str, hwnd: HWND) {
     }
 }
 
-fn runtime_log_path() -> Option<&'static PathBuf> {
-    RUNTIME_LOG_PATH
-        .get_or_init(|| env::var_os(RUNTIME_LOG_ENV).map(PathBuf::from))
-        .as_ref()
+fn runtime_log_path() -> &'static PathBuf {
+    RUNTIME_LOG_PATH.get_or_init(|| {
+        env::var_os(RUNTIME_LOG_ENV)
+            .map(PathBuf::from)
+            .or_else(|| {
+                env::var_os("LOCALAPPDATA").map(|path| {
+                    PathBuf::from(path)
+                        .join("CC Traffic Light")
+                        .join("logs")
+                        .join("runtime.log")
+                })
+            })
+            .unwrap_or_else(|| PathBuf::from("cc-traffic-light-runtime.log"))
+    })
 }
 
 fn append_runtime_log(message: &str) {
-    let Some(path) = runtime_log_path() else {
-        return;
-    };
+    let path = runtime_log_path();
     let lock = RUNTIME_LOG_LOCK.get_or_init(|| Mutex::new(()));
     let Ok(_guard) = lock.lock() else {
         return;
     };
+    rotate_runtime_log_if_needed(path);
     let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
         return;
     };
 
     let _ = writeln!(file, "{} {}", timestamp_ms(), message);
+}
+
+fn rotate_runtime_log_if_needed(path: &PathBuf) {
+    let Ok(metadata) = fs::metadata(path) else {
+        return;
+    };
+    if metadata.len() < RUNTIME_LOG_MAX_BYTES {
+        return;
+    }
+
+    let backup_path = path.with_extension("log.1");
+    let _ = fs::remove_file(&backup_path);
+    if fs::rename(path, &backup_path).is_err() {
+        let _ = OpenOptions::new().write(true).truncate(true).open(path);
+    }
 }
 
 fn timestamp_ms() -> u64 {

@@ -7,6 +7,11 @@ else {
     (Get-Command node -ErrorAction Stop).Source
 }
 
+& $nodePath .\node_modules\@inlang\paraglide-js\bin\run.js compile --project .\project.inlang --outdir .\src\paraglide --silent
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 & $nodePath .\node_modules\typescript\lib\tsc.js -b
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
