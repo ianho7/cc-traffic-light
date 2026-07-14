@@ -1,3 +1,35 @@
+# Project Rules
+
+## Project Overview
+
+- This is a Rust + PNPM workspace containing a Win32 taskbar host and a Tauri settings app.
+- The frontend is in `taskbar-settings-tauri/src/`.
+- The Tauri backend is in `taskbar-settings-tauri/src-tauri/`.
+- The Win32 host is in `taskbar-widget/`.
+- Shared business logic is in `crates/shared-core/`.
+
+## Common Commands
+
+- Install dependencies: `pnpm install`
+- Start frontend development: `pnpm settings:dev`
+- Build the frontend: `pnpm build:frontend`
+- Run Rust tests: `cargo test --workspace --offline`
+- Check the host: `cargo check -p taskbar-widget --offline`
+
+## Modification Constraints
+
+- Modify only files related to the current task.
+- Do not refactor code outside the scope of the current task.
+- Do not overwrite existing user changes.
+- Do not perform destructive or external state changes without confirmation.
+
+## Delivery Standards
+
+- Explain what was changed.
+- Run relevant tests or build commands where practical.
+- Explain the reason for any test failures.
+- For UI changes, check both desktop and narrow-window layouts.
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
@@ -18,7 +50,11 @@ Key host entry points:
 - `taskbar-widget/src/settings_bridge.rs` owns the host-side settings facade used by fallback UIs and Tauri IPC.
 - `taskbar-widget/src/tauri_settings_ipc.rs` owns the named-pipe server for Tauri settings commands.
 - `taskbar-widget/src/taskbar.rs` owns taskbar probing, `SetParent`, positioning, layout diagnostics, and attach/recovery support.
+- `taskbar-widget/src/detector.rs` owns Codex/Claude detection and the refresh loop.
+- `taskbar-widget/src/agent_state.rs` owns hook state persistence, stale handling, and aggregation.
+- `taskbar-widget/src/hook_rules.rs` owns hook payload extraction and event-to-state mapping.
 - `taskbar-widget/src/widget_effects.rs` owns blink timing and reduced-motion behavior; `taskbar-widget/src/widget_render.rs` owns lamp rendering.
+- `taskbar-widget/src/widget_image.rs` owns widget image resource handling.
 - `taskbar-widget/src/win32.rs` contains small Win32 helpers for logging, DPI, HWND, and RECT formatting.
 
 Build artifacts live under the root `target/` directory and `taskbar-settings-tauri/dist/`; they should not be treated as source.
@@ -43,7 +79,19 @@ Runs the current Rust test set for `shared-core`, the Tauri backend crate, and t
 pnpm build
 ```
 
-Builds the Tauri settings frontend assets under `taskbar-settings-tauri/dist/`.
+Runs the full debug rebuild pipeline for the frontend, Tauri settings app, hook CLI, and Win32 host.
+
+```powershell
+pnpm settings:tauri:dev
+```
+
+Starts the Tauri settings app in development mode.
+
+```powershell
+pnpm pack
+```
+
+Packages the application artifacts.
 
 ```powershell
 cargo build -p taskbar-settings-tauri --release --offline
@@ -63,7 +111,6 @@ Important build constraint:
 - Do not use `cargo build --workspace` as the host acceptance build for `taskbar-widget.exe`.
 - The workspace-wide build can unify Tauri-side features back into the host dependency graph and reintroduce the `TaskDialogIndirect` loader failure.
 - When validating the host executable, keep `taskbar-widget` as the last separately built package.
-- The 2026-07-13 release gate passed workspace tests, `pnpm build`, separate release builds, Settings lifecycle checks, and Explorer restart recovery. Installer/upgrade/uninstall and some desktop recording evidence remain explicitly waived.
 
 ## Coding Style & Naming Conventions
 
