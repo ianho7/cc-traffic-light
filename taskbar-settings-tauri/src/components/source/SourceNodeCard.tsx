@@ -1,7 +1,9 @@
 import StatusDot from "../primitives/StatusDot";
+import AgentLabel, { type Agent } from "../shared/AgentLabel";
 import { m } from "../../paraglide/messages.js";
 
 interface SourceNodeCardProps {
+  agent: Agent;
   name: string;
   enabled: boolean;
   statusTone: "green" | "yellow" | "red" | "idle";
@@ -11,6 +13,7 @@ interface SourceNodeCardProps {
 
 /** Node card: large ON/OFF text, status dot, participate pill */
 export default function SourceNodeCard({
+  agent,
   name,
   enabled,
   statusTone: tone,
@@ -29,12 +32,13 @@ export default function SourceNodeCard({
         cursor: disabled ? "not-allowed" : "pointer"
       }}
     >
-      <h2 style={{ fontSize: 36, margin: 0 }}>{name}</h2>
+      <h2 style={{ fontSize: 36, margin: 0 }}><AgentLabel agent={agent}>{name}</AgentLabel></h2>
       <div
         className="source-node-big"
         style={{
           fontSize: 58,
-          fontWeight: 950,
+          fontWeight: "bolder",
+          fontFamily: "var(--mono)",
           margin: "35px 0"
         }}
       >

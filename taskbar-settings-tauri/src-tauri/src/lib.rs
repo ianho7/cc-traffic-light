@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env, fs,
     path::PathBuf,
     sync::{
@@ -7,6 +8,7 @@ use std::{
     },
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use shared_core::{
     app_config::{
         AppConfig, MaterialGroup, changed_keys, config_dir_path, config_file_path,
@@ -21,10 +23,54 @@ use shared_core::{
         TAURI_SETTINGS_PROTOCOL_VERSION,
     },
 };
+use tauri::Manager;
 use windows::{
     Win32::System::Pipes::{CallNamedPipeW, WaitNamedPipeW},
     core::PCWSTR,
 };
+
+struct WindowBehaviorState {
+    close_to_tray: Mutex<bool>,
+}
+
+impl Default for WindowBehaviorState {
+    fn default() -> Self {
+        let close_to_tray = env::var(CLOSE_TO_TRAY_ENV)
+            .ok()
+            .and_then(|value| match value.as_str() {
+                "1" | "true" | "TRUE" | "True" => Some(true),
+                "0" | "false" | "FALSE" | "False" => Some(false),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                shared_core::app_config::load_config_diagnostic()
+                    .config
+                    .general
+                    .close_to_tray
+            });
+        Self {
+            // Initialize before the frontend's bootstrap command runs, so a
+            // close request immediately after startup still honors the saved
+            // preference. bootstrap_window remains the live host sync point.
+            close_to_tray: Mutex::new(close_to_tray),
+        }
+    }
+}
+
+impl WindowBehaviorState {
+    fn sync_from_settings(&self, settings: &AppConfig) {
+        if let Ok(mut close_to_tray) = self.close_to_tray.lock() {
+            *close_to_tray = settings.general.close_to_tray;
+        }
+    }
+
+    fn should_close_to_tray(&self) -> bool {
+        self.close_to_tray
+            .lock()
+            .map(|value| *value)
+            .unwrap_or(true)
+    }
+}
 
 #[derive(Clone)]
 struct FakeBackendState {
@@ -35,8 +81,16 @@ struct FakeBackendState {
 static FAKE_STATE: OnceLock<Mutex<FakeBackendState>> = OnceLock::new();
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 const FAKE_BACKEND_ENV: &str = "CC_TRAFFIC_LIGHT_TAURI_FAKE_BACKEND";
+const CLOSE_TO_TRAY_ENV: &str = "CC_TRAFFIC_LIGHT_CLOSE_TO_TRAY";
 const MATERIAL_IMAGE_SIZE: u32 = 64;
 const MATERIAL_MAX_BYTES: usize = 256 * 1024;
+
+#[derive(serde::Serialize)]
+struct MaterialGroupPreviewDto {
+    green: String,
+    yellow: String,
+    red: String,
+}
 
 struct MaterialFileSwap {
     final_path: PathBuf,
@@ -248,7 +302,9 @@ fn call_or_fake<T>(
 }
 
 #[tauri::command]
-fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
+fn bootstrap_window(
+    window_behavior: tauri::State<'_, WindowBehaviorState>,
+) -> Result<SettingsBootstrapDto, String> {
     if let (
         Ok(SettingsIpcResponse::GetSnapshot { snapshot }),
         Ok(SettingsIpcResponse::GetSettings { settings }),
@@ -256,7 +312,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
         call_pipe(SettingsIpcCommand::GetSnapshot),
         call_pipe(SettingsIpcCommand::GetSettings),
     ) {
-        return Ok(SettingsBootstrapDto {
+        let bootstrap = SettingsBootstrapDto {
             protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
             transport: SettingsTransportDto {
                 kind: "named_pipe".to_string(),
@@ -275,7 +331,9 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
             default_widget_palette: default_widget_palette(),
             snapshot,
             settings,
-        });
+        };
+        window_behavior.sync_from_settings(&bootstrap.settings);
+        return Ok(bootstrap);
     }
 
     if !fake_backend_enabled() {
@@ -288,7 +346,7 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
     let guard = state()
         .lock()
         .map_err(|_| "fake state lock poisoned".to_string())?;
-    Ok(SettingsBootstrapDto {
+    let bootstrap = SettingsBootstrapDto {
         protocol_version: TAURI_SETTINGS_PROTOCOL_VERSION.to_string(),
         transport: SettingsTransportDto {
             kind: "named_pipe".to_string(),
@@ -307,7 +365,9 @@ fn bootstrap_window() -> Result<SettingsBootstrapDto, String> {
         default_widget_palette: default_widget_palette(),
         snapshot: guard.snapshot.clone(),
         settings: guard.settings.clone(),
-    })
+    };
+    window_behavior.sync_from_settings(&bootstrap.settings);
+    Ok(bootstrap)
 }
 
 #[tauri::command]
@@ -337,7 +397,16 @@ fn get_settings() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-fn save_settings(settings: AppConfig) -> Result<SettingsSaveResultDto, String> {
+fn save_settings(
+    settings: AppConfig,
+    window_behavior: tauri::State<'_, WindowBehaviorState>,
+) -> Result<SettingsSaveResultDto, String> {
+    let result = save_settings_inner(settings)?;
+    window_behavior.sync_from_settings(&result.settings);
+    Ok(result)
+}
+
+fn save_settings_inner(settings: AppConfig) -> Result<SettingsSaveResultDto, String> {
     call_or_fake(
         SettingsIpcCommand::SaveSettings {
             settings: settings.clone(),
@@ -381,7 +450,7 @@ fn save_material_group(
         next.widget_visual.material_groups.push(group);
     }
 
-    match save_settings(next) {
+    match save_settings_inner(next) {
         Ok(result) => {
             transaction.commit();
             Ok(result)
@@ -418,7 +487,7 @@ fn delete_material_group(
         .material_groups
         .retain(|group| group.id != group_id);
 
-    match save_settings(next) {
+    match save_settings_inner(next) {
         Ok(result) => {
             transaction.commit();
             Ok(result)
@@ -458,6 +527,29 @@ fn get_material_group_availability(settings: AppConfig) -> Vec<MaterialGroupAvai
             }),
         })
         .collect()
+}
+
+#[tauri::command]
+fn get_material_group_previews(
+    settings: AppConfig,
+) -> Result<HashMap<String, MaterialGroupPreviewDto>, String> {
+    settings
+        .widget_visual
+        .material_groups
+        .into_iter()
+        .map(|group| {
+            let green = material_preview_data_url(&group.green_path)?;
+            let yellow = material_preview_data_url(&group.yellow_path)?;
+            let red = material_preview_data_url(&group.red_path)?;
+            Ok((group.id, MaterialGroupPreviewDto { green, yellow, red }))
+        })
+        .collect()
+}
+
+fn material_preview_data_url(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|error| format!("failed to read material preview: {error}"))?;
+    validate_material_png(&bytes)?;
+    Ok(format!("data:image/png;base64,{}", BASE64.encode(bytes)))
 }
 
 fn build_material_group(group_id: &str, name: &str) -> Result<MaterialGroup, String> {
@@ -775,6 +867,21 @@ fn uninstall_claude_hooks() -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(WindowBehaviorState::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.state::<WindowBehaviorState>().should_close_to_tray() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    // Closing the last Tauri window does not necessarily end
+                    // the process on every Windows runtime configuration.
+                    // This application owns a single settings window, so OFF
+                    // has an explicit process-exit contract.
+                    std::process::exit(0);
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             bootstrap_window,
             get_snapshot,
@@ -783,6 +890,7 @@ pub fn run() {
             save_material_group,
             delete_material_group,
             get_material_group_availability,
+            get_material_group_previews,
             request_refresh,
             notify_settings_applied,
             get_hook_status,

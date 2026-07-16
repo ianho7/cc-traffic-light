@@ -45,7 +45,7 @@ export default function ToggleMatrixCard({
       ) : (
         <div style={{ marginTop: 30 }}>
           <span
-            className="pill"
+            className="pill pill--ui"
             style={{
               display: "inline-flex",
               alignItems: "center",

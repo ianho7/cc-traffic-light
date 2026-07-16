@@ -3,9 +3,11 @@ import DotObject from "../components/appearance/DotObject";
 import DotObjectGrid from "../components/appearance/DotObjectGrid";
 import BrightnessControl from "../components/appearance/BrightnessControl";
 import ActionButton from "../components/shared/ActionButton";
+import ConfirmDialog from "../components/primitives/ConfirmDialog";
 import {
   deleteMaterialGroup,
   getMaterialGroupAvailability,
+  getMaterialGroupPreviews,
   notifySettingsApplied,
   saveSettings,
   saveMaterialGroup
@@ -14,9 +16,11 @@ import type {
   AppConfig,
   MaterialGroup,
   MaterialGroupAvailability,
+  MaterialGroupPreview,
   WidgetPaletteConfig
 } from "../types";
 import { m } from "../paraglide/messages.js";
+import AgentLabel from "../components/shared/AgentLabel";
 
 type Tone = "green" | "yellow" | "red";
 type Agent = "codex" | "claude";
@@ -50,25 +54,30 @@ export default function MaterialGroupsSection({
   onSettingsSaved
 }: MaterialGroupsSectionProps) {
   const [name, setName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [images, setImages] = useState<CroppedImages>(EMPTY_IMAGES);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
+  const [previews, setPreviews] = useState<Record<string, MaterialGroupPreview>>({});
   const [editorOpen, setEditorOpen] = useState(false);
   const [builtinOpen, setBuiltinOpen] = useState(false);
   const [materialSize, setMaterialSize] = useState(settings.widget_visual.material_display_size_px);
-  const [materialEffectsOpen, setMaterialEffectsOpen] = useState(false);
+  const [materialSettingsOpen, setMaterialSettingsOpen] = useState(false);
   const [materialBrightness, setMaterialBrightness] = useState<MaterialBrightness>(() => ({
     idle: settings.widget_visual.material_idle_brightness_percent,
     blink: settings.widget_visual.material_blink_brightness_percent,
     steady: settings.widget_visual.material_steady_brightness_percent
   }));
+  const [pendingDeletion, setPendingDeletion] = useState<MaterialGroup | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     void getMaterialGroupAvailability(settings)
       .then((items) => setAvailability(Object.fromEntries(items.map((item: MaterialGroupAvailability) => [item.group_id, item.available]))))
       .catch(() => setAvailability({}));
+    void getMaterialGroupPreviews(settings)
+      .then(setPreviews)
+      .catch(() => setPreviews({}));
   }, [settings]);
 
   const disabled = pending || busy;
@@ -95,20 +104,12 @@ export default function MaterialGroupsSection({
   const claudeSource = resolveSourceName(materialById, settings.widget_visual.claude_material_group_id);
 
   const resetEditor = () => {
-    setEditingId(null);
     setName("");
     setImages(EMPTY_IMAGES);
   };
 
   const startNewGroup = () => {
     resetEditor();
-    setEditorOpen(true);
-  };
-
-  const startReplacingGroup = (group: MaterialGroup) => {
-    setEditingId(group.id);
-    setName(group.name);
-    setImages(EMPTY_IMAGES);
     setEditorOpen(true);
   };
 
@@ -122,7 +123,7 @@ export default function MaterialGroupsSection({
     setBusy(true);
     setFeedback(null);
     try {
-      const groupId = editingId ?? crypto.randomUUID();
+      const groupId = crypto.randomUUID();
       const result = await saveMaterialGroup(
         settings,
         groupId,
@@ -158,14 +159,15 @@ export default function MaterialGroupsSection({
     }
   };
 
-  const remove = async (groupId: string) => {
-    if (!window.confirm(m.material_confirm_delete())) return;
+  const remove = async () => {
+    if (!pendingDeletion) return;
     setBusy(true);
     setFeedback(null);
     try {
-      const result = await deleteMaterialGroup(settings, groupId);
+      const result = await deleteMaterialGroup(settings, pendingDeletion.id);
       await notifySettingsApplied(["widget_visual.material_groups"]);
       onSettingsSaved(result.settings);
+      setPendingDeletion(null);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : m.material_delete_error());
     } finally {
@@ -239,104 +241,15 @@ export default function MaterialGroupsSection({
   };
 
   return (
+    <>
     <section className="material-library" aria-label={m.material_groups_aria()}>
       <section className="appearance-assignment" aria-label={m.material_assignment_aria()}>
-        <AssignmentCard agent={m.source_label_codex()} sourceName={codexSource} />
-        <AssignmentCard agent={m.source_label_claude()} sourceName={claudeSource} />
+        <AssignmentCard agent="codex" sourceName={codexSource} />
+        <AssignmentCard agent="claude" sourceName={claudeSource} />
       </section>
 
-      <section className="material-resource-section" aria-label={m.material_resources_aria()}>
-        <div className="material-section-header">
-          <div>
-            <span className="meta-label">{m.material_sources_kicker()}</span>
-            <h2>{m.material_sources_title()}</h2>
-            <p>{m.material_sources_note()}</p>
-          </div>
-          <ActionButton disabled={disabled} variant="secondary" onClick={startNewGroup}>
-            {m.material_new_group()}
-          </ActionButton>
-        </div>
-
-        <div className="material-display-size" aria-disabled={!hasMaterialGroups || disabled}>
-          <div>
-            <strong>{m.material_display_size_label()}</strong>
-            <p>{m.material_display_size_note()}</p>
-          </div>
-          <div className="material-display-size__control">
-            <input
-              type="range"
-              min={MATERIAL_DISPLAY_SIZE_MIN}
-              max={MATERIAL_DISPLAY_SIZE_MAX}
-              step={1}
-              value={materialSize}
-              disabled={!hasMaterialGroups || disabled}
-              aria-label={m.material_display_size_aria()}
-              onChange={(event) => setMaterialSize(Number(event.currentTarget.value))}
-              onPointerUp={commitMaterialSize}
-              onKeyUp={(event) => {
-                if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
-                  commitMaterialSize();
-                }
-              }}
-              onBlur={commitMaterialSize}
-            />
-            <output>{materialSize}px</output>
-          </div>
-        </div>
-
-        <section className="material-effects" aria-disabled={!hasMaterialGroups || disabled}>
-          <div className="material-effects__header">
-            <div>
-              <strong>{m.material_effects_label()}</strong>
-              <p>{m.material_effects_note()}</p>
-            </div>
-            <ActionButton
-              size="compact"
-              variant="secondary"
-              disabled={!hasMaterialGroups || disabled}
-              onClick={() => setMaterialEffectsOpen((current) => !current)}
-            >
-              {materialEffectsOpen ? m.material_effects_hide() : m.material_effects_adjust()}
-            </ActionButton>
-          </div>
-          {materialEffectsOpen ? (
-            <div className="material-effects__controls">
-              <MaterialEffectSlider
-                disabled={!hasMaterialGroups || disabled}
-                label={m.material_idle_brightness_label()}
-                min={0}
-                max={MATERIAL_IDLE_BRIGHTNESS_MAX}
-                value={materialBrightness.idle}
-                onChange={(value) => updateMaterialBrightness("idle", value)}
-                onCommit={commitMaterialBrightness}
-              />
-              <MaterialEffectSlider
-                disabled={!hasMaterialGroups || disabled}
-                label={m.material_blink_brightness_label()}
-                min={materialBrightness.idle}
-                max={MATERIAL_BRIGHTNESS_MAX}
-                value={materialBrightness.blink}
-                onChange={(value) => updateMaterialBrightness("blink", value)}
-                onCommit={commitMaterialBrightness}
-              />
-              <MaterialEffectSlider
-                disabled={!hasMaterialGroups || disabled}
-                label={m.material_steady_brightness_label()}
-                min={materialBrightness.idle}
-                max={MATERIAL_BRIGHTNESS_MAX}
-                value={materialBrightness.steady}
-                onChange={(value) => updateMaterialBrightness("steady", value)}
-                onCommit={commitMaterialBrightness}
-              />
-              <ActionButton disabled={!hasMaterialGroups || disabled} variant="secondary" onClick={resetMaterialBrightness}>
-                {m.material_effects_reset()}
-              </ActionButton>
-            </div>
-          ) : null}
-        </section>
-
-        <div className="material-groups">
-          <article className="material-group-card material-group-card--default">
+      <section className="material-builtin-section" aria-label={m.material_builtin_title()}>
+        <article className="material-builtin-card">
             <div>
               <strong>{m.material_builtin_title()}</strong>
               <span>{m.material_builtin_note()}</span>
@@ -344,30 +257,34 @@ export default function MaterialGroupsSection({
             <MaterialStatePreview colors={[palette.green, palette.yellow, palette.red]} />
             <UsageBadges codex={isBuiltinUsedByCodex} claude={isBuiltinUsedByClaude} />
             <div className="material-group-card__actions">
-              <ActionButton
-                size="compact"
-                variant={isBuiltinUsedByCodex ? "secondary" : "primary"}
-                disabled={disabled || isBuiltinUsedByCodex}
-                onClick={() => void apply("codex", null)}
-              >
-                {m.material_use_codex()}
-              </ActionButton>
-              <ActionButton
-                size="compact"
-                variant={isBuiltinUsedByClaude ? "secondary" : "primary"}
-                disabled={disabled || isBuiltinUsedByClaude}
-                onClick={() => void apply("claude", null)}
-              >
-                {m.material_use_claude()}
-              </ActionButton>
-              <ActionButton
-                size="compact"
-                variant="secondary"
-                disabled={disabled}
-                onClick={() => setBuiltinOpen((current) => !current)}
-              >
-                {builtinOpen ? m.material_hide_builtin_settings() : m.material_adjust_builtin()}
-              </ActionButton>
+              <div className="material-group-card__apply-actions">
+                <ActionButton
+                  size="compact"
+                  variant={isBuiltinUsedByCodex ? "secondary" : "primary"}
+                  disabled={disabled || isBuiltinUsedByCodex}
+                  onClick={() => void apply("codex", null)}
+                >
+                  {m.material_apply_codex()}
+                </ActionButton>
+                <ActionButton
+                  size="compact"
+                  variant={isBuiltinUsedByClaude ? "secondary" : "primary"}
+                  disabled={disabled || isBuiltinUsedByClaude}
+                  onClick={() => void apply("claude", null)}
+                >
+                  {m.material_apply_claude()}
+                </ActionButton>
+              </div>
+              <div className="material-group-card__other-actions">
+                <ActionButton
+                  size="compact"
+                  variant="secondary"
+                  disabled={disabled}
+                  onClick={() => setBuiltinOpen((current) => !current)}
+                >
+                  {builtinOpen ? m.material_hide_builtin_settings() : m.material_adjust_builtin()}
+                </ActionButton>
+              </div>
             </div>
             {builtinOpen ? (
               <div className="material-built-in-settings">
@@ -447,17 +364,24 @@ export default function MaterialGroupsSection({
                 </div>
               </div>
             ) : null}
-          </article>
+        </article>
+      </section>
 
-          {settings.widget_visual.material_groups.length === 0 ? (
+      <section className="material-custom-section" aria-label={m.material_saved_groups_aria()}>
+        <div className="material-section-header">
+          <h2>{m.material_custom_title()}</h2>
+          <ActionButton disabled={disabled} variant="secondary" onClick={startNewGroup}>
+            {m.material_new_group()}
+          </ActionButton>
+        </div>
+
+        {settings.widget_visual.material_groups.length === 0 ? (
             <div className="material-empty-state base-card">
               <span className="meta-label">{m.material_empty_kicker()}</span>
               <p>{m.material_empty_note()}</p>
-              <ActionButton disabled={disabled} size="compact" onClick={startNewGroup}>
-                {m.material_new_group()}
-              </ActionButton>
             </div>
-          ) : null}
+        ) : (
+          <div className="material-groups">
 
           {settings.widget_visual.material_groups.map((group) => {
             const usedByCodex = settings.widget_visual.codex_material_group_id === group.id;
@@ -469,56 +393,121 @@ export default function MaterialGroupsSection({
               <article className="material-group-card" key={group.id}>
                 <div>
                   <strong>{group.name}</strong>
-                  <span>{isAvailable ? m.material_custom_note() : m.material_unavailable()}</span>
+                  {isAvailable ? null : <span>{m.material_unavailable()}</span>}
                 </div>
-                <MaterialStatePreview />
+                <MaterialStatePreview preview={previews[group.id]} />
                 <UsageBadges codex={usedByCodex} claude={usedByClaude} />
                 <div className="material-group-card__actions">
-                  <ActionButton
-                    size="compact"
-                    variant={usedByCodex ? "secondary" : "primary"}
-                    disabled={disabled || usedByCodex || !isAvailable}
-                    onClick={() => void apply("codex", group.id)}
-                  >
-                    {m.material_apply_codex()}
-                  </ActionButton>
-                  <ActionButton
-                    size="compact"
-                    variant={usedByClaude ? "secondary" : "primary"}
-                    disabled={disabled || usedByClaude || !isAvailable}
-                    onClick={() => void apply("claude", group.id)}
-                  >
-                    {m.material_apply_claude()}
-                  </ActionButton>
-                  <ActionButton
-                    size="compact"
-                    variant="secondary"
-                    disabled={disabled}
-                    onClick={() => startReplacingGroup(group)}
-                  >
-                    {m.material_replace_images()}
-                  </ActionButton>
-                  <ActionButton
-                    size="compact"
-                    variant="danger"
-                    disabled={disabled || inUse}
-                    onClick={() => void remove(group.id)}
-                  >
-                    {m.material_delete()}
-                  </ActionButton>
+                  <div className="material-group-card__apply-actions">
+                    <ActionButton
+                      size="compact"
+                      variant={usedByCodex ? "secondary" : "primary"}
+                      disabled={disabled || usedByCodex || !isAvailable}
+                      onClick={() => void apply("codex", group.id)}
+                    >
+                      {m.material_apply_codex()}
+                    </ActionButton>
+                    <ActionButton
+                      size="compact"
+                      variant={usedByClaude ? "secondary" : "primary"}
+                      disabled={disabled || usedByClaude || !isAvailable}
+                      onClick={() => void apply("claude", group.id)}
+                    >
+                      {m.material_apply_claude()}
+                    </ActionButton>
+                  </div>
+                  <div className="material-group-card__other-actions">
+                    <ActionButton
+                      size="compact"
+                      variant="danger"
+                      disabled={disabled || inUse}
+                      onClick={(event) => {
+                        deleteTriggerRef.current = event.currentTarget;
+                        setPendingDeletion(group);
+                      }}
+                    >
+                      {m.material_delete()}
+                    </ActionButton>
+                  </div>
                 </div>
                 {inUse ? <small>{m.material_in_use_note()}</small> : null}
               </article>
             );
           })}
-        </div>
+          </div>
+        )}
+
+        {hasMaterialGroups ? (
+          <section className="material-custom-settings">
+            <div className="material-custom-settings__header">
+              <div>
+                <strong>{m.material_settings_label()}</strong>
+                <p>{m.material_settings_note()}</p>
+              </div>
+              <ActionButton
+                size="compact"
+                variant="secondary"
+                disabled={disabled}
+                onClick={() => setMaterialSettingsOpen((current) => !current)}
+              >
+                {materialSettingsOpen ? m.material_settings_hide() : m.material_settings_adjust()}
+              </ActionButton>
+            </div>
+            {materialSettingsOpen ? (
+              <div className="material-custom-settings__content">
+                <div className="material-display-size">
+                  <div>
+                    <strong>{m.material_display_size_label()}</strong>
+                    <p>{m.material_display_size_note()}</p>
+                  </div>
+                  <div className="material-display-size__control">
+                    <input
+                      type="range"
+                      min={MATERIAL_DISPLAY_SIZE_MIN}
+                      max={MATERIAL_DISPLAY_SIZE_MAX}
+                      step={1}
+                      value={materialSize}
+                      disabled={disabled}
+                      aria-label={m.material_display_size_aria()}
+                      onChange={(event) => setMaterialSize(Number(event.currentTarget.value))}
+                      onPointerUp={commitMaterialSize}
+                      onKeyUp={(event) => {
+                        if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
+                          commitMaterialSize();
+                        }
+                      }}
+                      onBlur={commitMaterialSize}
+                    />
+                    <output>{materialSize}px</output>
+                  </div>
+                </div>
+                <div className="material-effects">
+                  <div className="material-effects__header">
+                    <div>
+                      <strong>{m.material_effects_label()}</strong>
+                      <p>{m.material_effects_note()}</p>
+                    </div>
+                  </div>
+                  <div className="material-effects__controls">
+                    <MaterialEffectSlider disabled={disabled} label={m.material_idle_brightness_label()} min={0} max={MATERIAL_IDLE_BRIGHTNESS_MAX} value={materialBrightness.idle} onChange={(value) => updateMaterialBrightness("idle", value)} onCommit={commitMaterialBrightness} />
+                    <MaterialEffectSlider disabled={disabled} label={m.material_blink_brightness_label()} min={materialBrightness.idle} max={MATERIAL_BRIGHTNESS_MAX} value={materialBrightness.blink} onChange={(value) => updateMaterialBrightness("blink", value)} onCommit={commitMaterialBrightness} />
+                    <MaterialEffectSlider disabled={disabled} label={m.material_steady_brightness_label()} min={materialBrightness.idle} max={MATERIAL_BRIGHTNESS_MAX} value={materialBrightness.steady} onChange={(value) => updateMaterialBrightness("steady", value)} onCommit={commitMaterialBrightness} />
+                    <ActionButton disabled={disabled} variant="secondary" onClick={resetMaterialBrightness}>
+                      {m.material_effects_reset()}
+                    </ActionButton>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </section>
 
       {editorOpen ? (
-        <section className="material-editor base-card" aria-label={editingId ? m.material_editor_edit() : m.material_editor_new()}>
+        <section className="material-editor base-card" aria-label={m.material_editor_new()}>
           <div className="material-editor__header">
             <div>
-              <span className="meta-label">{editingId ? m.material_editor_edit() : m.material_editor_new()}</span>
+              <span className="meta-label">{m.material_editor_new()}</span>
               <p>{m.material_editor_note()}</p>
             </div>
             <ActionButton disabled={disabled} variant="secondary" size="compact" onClick={closeEditor}>
@@ -544,6 +533,21 @@ export default function MaterialGroupsSection({
 
       {feedback ? <p className="material-feedback" role="alert">{feedback}</p> : null}
     </section>
+    <ConfirmDialog
+      ariaLabel={m.material_delete_dialog_aria()}
+      busy={busy}
+      cancelLabel={m.monitoring_dialog_cancel()}
+      confirmLabel={m.material_delete_confirm()}
+      description={m.material_delete_dialog_description()}
+      eyebrow={m.material_delete_dialog_kicker()}
+      onCancel={() => setPendingDeletion(null)}
+      onConfirm={remove}
+      open={pendingDeletion !== null}
+      returnFocusRef={deleteTriggerRef}
+      submittingLabel={m.material_deleting()}
+      title={pendingDeletion ? m.material_delete_dialog_title({ name: pendingDeletion.name }) : ""}
+    />
+    </>
   );
 }
 
@@ -554,11 +558,13 @@ function resolveSourceName(materialById: Map<string, MaterialGroup>, groupId: st
   return materialById.get(groupId)?.name ?? m.material_missing_source();
 }
 
-function AssignmentCard({ agent, sourceName }: { agent: string; sourceName: string }) {
+function AssignmentCard({ agent, sourceName }: { agent: "codex" | "claude"; sourceName: string }) {
   return (
     <article className="appearance-assignment-card base-card">
-      <span className="meta-label">{agent}</span>
-      <strong>{sourceName}</strong>
+      <h2 style={{ fontSize: 22, margin: 0 }}>
+        <AgentLabel agent={agent}>{agent === "codex" ? m.source_label_codex() : m.source_label_claude()}</AgentLabel>
+      </h2>
+      {/* <strong>{sourceName}</strong> */}
       <p>{m.material_assignment_summary({ source: sourceName })}</p>
     </article>
   );
@@ -571,18 +577,18 @@ function UsageBadges({ codex, claude }: { codex: boolean; claude: boolean }) {
 
   return (
     <div className="material-usage">
-      {codex ? <span>{m.source_label_codex()}</span> : null}
-      {claude ? <span>{m.source_label_claude()}</span> : null}
+      {codex ? <AgentLabel agent="codex" size="compact">{m.source_label_codex()}</AgentLabel> : null}
+      {claude ? <AgentLabel agent="claude" size="compact">{m.source_label_claude()}</AgentLabel> : null}
     </div>
   );
 }
 
-function MaterialStatePreview({ colors }: { colors?: [string, string, string] }) {
+function MaterialStatePreview({ colors, preview }: { colors?: [string, string, string]; preview?: MaterialGroupPreview }) {
   return (
-    <div className="material-swatches" aria-label={m.material_state_preview_aria()}>
-      <i className="material-swatch material-swatch--green" style={colors ? { background: colors[0] } : undefined} />
-      <i className="material-swatch material-swatch--yellow" style={colors ? { background: colors[1] } : undefined} />
-      <i className="material-swatch material-swatch--red" style={colors ? { background: colors[2] } : undefined} />
+    <div className={`material-swatches${preview ? " material-swatches--images" : ""}`} aria-label={m.material_state_preview_aria()}>
+      <i className="material-swatch material-swatch--green" style={preview ? { backgroundImage: `url(${preview.green})` } : colors ? { background: colors[0] } : undefined} />
+      <i className="material-swatch material-swatch--yellow" style={preview ? { backgroundImage: `url(${preview.yellow})` } : colors ? { background: colors[1] } : undefined} />
+      <i className="material-swatch material-swatch--red" style={preview ? { backgroundImage: `url(${preview.red})` } : colors ? { background: colors[2] } : undefined} />
     </div>
   );
 }

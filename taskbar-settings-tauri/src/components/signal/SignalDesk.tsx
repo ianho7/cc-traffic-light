@@ -40,10 +40,10 @@ export default function SignalDesk({
     >
       <SignalStack activeTone={activeTone} />
 
-      <div>
+      <div className="signal-desk__state">
         <MetaLabel>{m.signal_overall_state_label()}</MetaLabel>
         <SignalStateText label={overallStateLabel} tone={activeTone} />
-        <p style={{ color: "var(--muted)" }}>{summaryLine}</p>
+        <p className="signal-desk__summary" style={{ color: "var(--muted)", fontFamily: "var(--mono)" }}>{summaryLine}</p>
       </div>
 
       <StatusInfoPanel

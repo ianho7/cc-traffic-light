@@ -1,6 +1,7 @@
-use std::{collections::BTreeMap, env, sync::OnceLock};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 use serde::Deserialize;
+use windows::Win32::Globalization::GetUserDefaultLocaleName;
 
 use crate::{
     app_config::{AppConfig, AppLanguage, IndicatorStyle, UiTheme, WidgetSize},
@@ -258,24 +259,43 @@ pub fn effective_locale(config: &AppConfig) -> AppLocale {
     match config.localization.language {
         AppLanguage::ZhCn => AppLocale::ZhCn,
         AppLanguage::En => AppLocale::En,
-        AppLanguage::FollowSystem => detect_system_locale(),
+        AppLanguage::FollowSystem => app_locale_for(system_default_language()),
     }
 }
 
-fn detect_system_locale() -> AppLocale {
-    let raw = env::var("LC_ALL")
-        .ok()
-        .or_else(|| env::var("LC_MESSAGES").ok())
-        .or_else(|| env::var("LANG").ok())
-        .or_else(|| env::var("LANGUAGE").ok())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+/// Resolve the Windows display locale once, so settings and the native host
+/// persist and use the same explicit language choice.
+pub fn system_default_language() -> AppLanguage {
+    const LOCALE_NAME_MAX_LENGTH: usize = 85;
+    let mut locale = [0u16; LOCALE_NAME_MAX_LENGTH];
+    let length = unsafe { GetUserDefaultLocaleName(&mut locale) };
+    let language =
+        String::from_utf16_lossy(&locale[..length.saturating_sub(1) as usize]).to_ascii_lowercase();
 
-    if raw.contains("zh") {
-        AppLocale::ZhCn
+    if language.starts_with("zh") {
+        AppLanguage::ZhCn
     } else {
-        AppLocale::En
+        AppLanguage::En
     }
+}
+
+fn app_locale_for(language: AppLanguage) -> AppLocale {
+    match language {
+        AppLanguage::ZhCn => AppLocale::ZhCn,
+        AppLanguage::En | AppLanguage::FollowSystem => AppLocale::En,
+    }
+}
+
+/// Convert legacy dynamic language settings to an explicit, persisted locale.
+/// `initialize_from_system` is used only when the application creates its
+/// first configuration file.
+pub fn resolve_persisted_language(config: &mut AppConfig, initialize_from_system: bool) -> bool {
+    if initialize_from_system || config.localization.language == AppLanguage::FollowSystem {
+        config.localization.language = system_default_language();
+        return true;
+    }
+
+    false
 }
 
 fn bundle_for(locale: AppLocale) -> &'static TranslationBundle {

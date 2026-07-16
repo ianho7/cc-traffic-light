@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE_NAME: &str = "config.json";
-const CONFIG_SCHEMA_VERSION: u32 = 5;
+const CONFIG_SCHEMA_VERSION: u32 = 7;
 pub const MATERIAL_DISPLAY_SIZE_MIN_PX: u8 = 16;
 pub const MATERIAL_DISPLAY_SIZE_MAX_PX: u8 = 32;
 pub const MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT: u8 = 80;
@@ -39,7 +39,6 @@ pub struct LocalizationConfig {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GeneralConfig {
     pub autostart_enabled: bool,
-    pub start_minimized_to_tray: bool,
     pub close_to_tray: bool,
 }
 
@@ -157,11 +156,13 @@ pub enum SettingsPage {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AppLanguage {
-    #[default]
+    /// Retained only to read configurations written by versions that exposed
+    /// the "follow system" preference. The host migrates it on load.
     #[serde(rename = "follow_system")]
     FollowSystem,
     #[serde(rename = "zh-CN")]
     ZhCn,
+    #[default]
     #[serde(rename = "en")]
     En,
 }
@@ -189,7 +190,6 @@ impl AppConfig {
             localization: LocalizationConfig::default(),
             general: GeneralConfig {
                 autostart_enabled: false,
-                start_minimized_to_tray: true,
                 close_to_tray: true,
             },
             monitoring: MonitoringConfig {
@@ -216,7 +216,7 @@ impl AppConfig {
 impl Default for LocalizationConfig {
     fn default() -> Self {
         Self {
-            language: AppLanguage::FollowSystem,
+            language: AppLanguage::default(),
         }
     }
 }
@@ -511,7 +511,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn missing_localization_defaults_to_follow_system() {
+    fn missing_localization_defaults_to_english() {
         let config = serde_json::from_str::<AppConfig>(
             r##"{
                 "schema_version": 1,
@@ -546,7 +546,29 @@ mod tests {
         )
         .expect("config should deserialize");
 
-        assert_eq!(config.localization.language, AppLanguage::FollowSystem);
+        assert_eq!(config.localization.language, AppLanguage::En);
+    }
+
+    #[test]
+    fn schema_upgrade_removes_retired_start_minimized_setting() {
+        let legacy = serde_json::from_str::<AppConfig>(
+            r##"{
+                "schema_version": 6,
+                "general": {
+                    "autostart_enabled": false,
+                    "start_minimized_to_tray": true,
+                    "close_to_tray": false
+                }
+            }"##,
+        )
+        .expect("legacy config should deserialize");
+
+        let normalized = normalize_config(&legacy);
+        let encoded = serde_json::to_string(&normalized).expect("config should serialize");
+
+        assert_eq!(normalized.schema_version, CONFIG_SCHEMA_VERSION);
+        assert!(!encoded.contains("start_minimized_to_tray"));
+        assert!(encoded.contains(r#""close_to_tray":false"#));
     }
 
     #[test]

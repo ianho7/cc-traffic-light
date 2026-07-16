@@ -4,6 +4,7 @@ import type {
   HookDiagnosticsDto,
   HookStatusDto,
   MaterialGroupAvailability,
+  MaterialGroupPreview,
   RuntimeLogDiagnosticsDto,
   SettingsBootstrapDto,
   SettingsRefreshResultDto,
@@ -51,6 +52,10 @@ export function deleteMaterialGroup(settings: AppConfig, groupId: string): Promi
 
 export function getMaterialGroupAvailability(settings: AppConfig): Promise<MaterialGroupAvailability[]> {
   return invoke("get_material_group_availability", { settings });
+}
+
+export function getMaterialGroupPreviews(settings: AppConfig): Promise<Record<string, MaterialGroupPreview>> {
+  return invoke("get_material_group_previews", { settings });
 }
 
 export function requestRefresh(): Promise<SettingsRefreshResultDto> {

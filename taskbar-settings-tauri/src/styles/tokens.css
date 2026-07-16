@@ -23,8 +23,8 @@
   --switch-knob-off: #999;
 
   /* ── 字体 ── */
-  --mono: ui-monospace, Consolas, monospace;
-  --ui: "SF Pro Display", "Segoe UI", Arial, sans-serif;
+  --mono: "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace;
+  --ui: "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif;
 
   /* ── 间距 (4px 基准) ── */
   --space-1: 4px;

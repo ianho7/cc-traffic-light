@@ -14,13 +14,14 @@ use windows::Win32::{
     },
 };
 
-use crate::win32;
+use crate::{settings_bridge, win32};
 
 const SETTINGS_HOST_ENV: &str = "CC_TRAFFIC_LIGHT_SETTINGS_HOST";
 const SETTINGS_HOST_TAURI: &str = "tauri";
 const SETTINGS_HOST_FALLBACK: &str = "fallback";
 const SETTINGS_HOST_WIN32: &str = "win32";
 const SETTINGS_EXE_ENV: &str = "CC_TRAFFIC_LIGHT_TAURI_SETTINGS_EXE";
+const CLOSE_TO_TRAY_ENV: &str = "CC_TRAFFIC_LIGHT_CLOSE_TO_TRAY";
 
 static SETTINGS_PROCESS: OnceLock<Mutex<SettingsProcessState>> = OnceLock::new();
 
@@ -99,6 +100,14 @@ pub fn open_or_focus_tauri_settings() -> Result<bool, String> {
     // It is launched from the GUI host, so suppress only the inherited console
     // window while leaving the Tauri UI free to create its normal top-level HWND.
     let child = Command::new(&exe_path)
+        .env(
+            CLOSE_TO_TRAY_ENV,
+            if settings_bridge::current_config().general.close_to_tray {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .creation_flags(CREATE_NO_WINDOW.0)
         .spawn()
         .map_err(|error| format!("failed to spawn {}: {error}", exe_path.display()))?;

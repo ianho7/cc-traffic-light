@@ -17,7 +17,7 @@ export default function NavItem({ id, index, label, active, onClick }: NavItemPr
       onClick={() => onClick(id)}
       type="button"
     >
-      {index} {label}
+      <span className="nav-item__index">{index}</span>{" "}{label}
     </button>
   );
 }

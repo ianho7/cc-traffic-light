@@ -27,11 +27,10 @@ export interface StatusSnapshotView {
 export interface AppConfig {
   schema_version: number;
   localization: {
-    language: "follow_system" | "zh-CN" | "en";
+    language: "zh-CN" | "en";
   };
   general: {
     autostart_enabled: boolean;
-    start_minimized_to_tray: boolean;
     close_to_tray: boolean;
   };
   monitoring: {
@@ -81,6 +80,12 @@ export interface MaterialGroup {
 export interface MaterialGroupAvailability {
   group_id: string;
   available: boolean;
+}
+
+export interface MaterialGroupPreview {
+  green: string;
+  yellow: string;
+  red: string;
 }
 
 export interface SettingsTransportDto {

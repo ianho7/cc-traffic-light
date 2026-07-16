@@ -10,8 +10,12 @@
 
 .brand {
   font: 800 12px var(--mono, ui-monospace, Consolas, monospace);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.04em;
   margin-bottom: var(--space-8, 32px);
+}
+
+:lang(en) .brand {
+  letter-spacing: 0.16em;
 }
 
 .nav {
@@ -29,10 +33,14 @@
   padding: 15px;
   border-radius: 12px;
   margin-bottom: 6px;
-  font: 700 12px var(--mono, ui-monospace, Consolas, monospace);
+  font: 700 12px var(--ui, "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif);
   cursor: pointer;
   color: var(--muted, #777);
   transition: background 120ms ease, color 120ms ease;
+}
+
+.nav-item__index {
+  font-family: var(--mono, "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace);
 }
 
 .nav-item:hover {

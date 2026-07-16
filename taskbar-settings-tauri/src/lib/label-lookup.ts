@@ -33,7 +33,6 @@ export function stateLabel(value: string): string {
 }
 
 export const LANGUAGE_LABELS: Record<string, () => string> = {
-  follow_system: m.language_label_follow_system,
   "zh-CN": m.language_label_zh_CN,
   en: m.language_label_en,
 };

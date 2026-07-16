@@ -20,7 +20,7 @@ use std::sync::{Mutex, OnceLock};
 use taskbar::{AppState, DebugLoopConfig, probe_taskbar};
 use taskbar_widget::{
     agent_state::{self},
-    app_config, detector,
+    app_config, detector, i18n,
     runtime_contract::RuntimeContract,
     ui_state::{AppStatusSnapshot, WidgetMountState},
     widget_effects::{self, WidgetEffectsState},
@@ -33,10 +33,10 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DispatchMessageW,
-            GetClientRect, GetMessageW, HCURSOR, HTCLIENT, HTTRANSPARENT, IDC_ARROW, KillTimer,
-            LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SetCursor,
-            SetTimer, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
-            WM_COMMAND, WM_DESTROY, WM_LBUTTONUP, WM_NCDESTROY, WM_NCHITTEST, WM_PAINT,
+            GetClientRect, GetMessageW, HCURSOR, HTCLIENT, HTTRANSPARENT, IDC_ARROW, IsWindow,
+            KillTimer, LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW,
+            SetCursor, SetTimer, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
+            WM_CLOSE, WM_COMMAND, WM_DESTROY, WM_LBUTTONUP, WM_NCDESTROY, WM_NCHITTEST, WM_PAINT,
             WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
         },
     },
@@ -67,6 +67,7 @@ struct WidgetRuntimeState {
     last_retry_at: Option<u64>,
     tray_registered: bool,
     last_tray_error: Option<String>,
+    last_taskbar_layout_fingerprint: Option<taskbar::TaskbarLayoutFingerprint>,
 }
 
 static PAINT_STATE: OnceLock<Mutex<PaintState>> = OnceLock::new();
@@ -96,7 +97,27 @@ fn main() -> Result<()> {
         win32::runtime_log_enabled()
     ));
     let mut config_result = app_config::load_config_diagnostic();
+    let language_initialized = i18n::resolve_persisted_language(
+        &mut config_result.config,
+        matches!(
+            config_result.outcome,
+            app_config::ConfigLoadOutcome::CreatedDefaultFile
+        ),
+    );
+    if language_initialized && let Err(error) = app_config::save_config(&config_result.config) {
+        runtime_log(&format!(
+            "failed to persist resolved language preference: {error}"
+        ));
+    }
+    let autostart_before_sync = config_result.config.general.autostart_enabled;
     autostart::sync_config_flag(&mut config_result.config);
+    if config_result.config.general.autostart_enabled != autostart_before_sync
+        && let Err(error) = app_config::save_config(&config_result.config)
+    {
+        runtime_log(&format!(
+            "failed to persist synchronized autostart preference: {error}"
+        ));
+    }
     let runtime_contract = RuntimeContract::v1_default();
     runtime_log(&format!(
         "config load_status={} path={} schema_version={} modules={} signals={}",
@@ -162,7 +183,10 @@ fn main() -> Result<()> {
     set_runtime_stage("position_in_taskbar");
     let layout = taskbar::position_in_taskbar(hwnd, &probe, &debug_config);
     taskbar::log_layout(&layout);
-    initialize_widget_runtime_state(widget_mount_state_from_results(&attach, &layout));
+    initialize_widget_runtime_state(
+        widget_mount_state_from_results(&attach, &layout),
+        taskbar::layout_fingerprint(hwnd, &probe),
+    );
     let state = AppState::from_runtime(hwnd, &probe, &attach, &layout);
     taskbar::log_state(&state);
     runtime_log(&format!(
@@ -298,6 +322,7 @@ unsafe extern "system" fn window_proc(
                 set_runtime_stage("wm_timer");
                 attempt_widget_recovery(hwnd);
                 poll_hook_state(hwnd);
+                relayout_widget_if_taskbar_changed(hwnd);
                 LRESULT(0)
             } else if wparam.0 == ANIMATION_TIMER_ID {
                 tick_widget_animation(hwnd);
@@ -764,8 +789,11 @@ fn handle_tray_action(hwnd: HWND, action: tray_icon::TrayAction) {
                     );
                 }
             }
-            if let Some(settings_hwnd) = current_settings_hwnd() {
-                settings_window::show_window(settings_hwnd);
+            match ensure_fallback_settings_window() {
+                Ok(settings_hwnd) => settings_window::show_window(settings_hwnd),
+                Err(error) => runtime_log(&format!(
+                    "failed to create fallback settings window after Tauri settings was unavailable: {error}"
+                )),
             }
         }
         tray_icon::TrayAction::Refresh => {
@@ -816,7 +844,10 @@ fn run_message_loop() -> Result<()> {
     Ok(())
 }
 
-fn initialize_widget_runtime_state(mount_state: WidgetMountState) {
+fn initialize_widget_runtime_state(
+    mount_state: WidgetMountState,
+    last_taskbar_layout_fingerprint: Option<taskbar::TaskbarLayoutFingerprint>,
+) {
     let now = agent_state::now_ms();
     let state = WidgetRuntimeState {
         mount_state,
@@ -824,6 +855,7 @@ fn initialize_widget_runtime_state(mount_state: WidgetMountState) {
         last_retry_at: None,
         tray_registered: false,
         last_tray_error: None,
+        last_taskbar_layout_fingerprint,
     };
     let _ = WIDGET_RUNTIME_STATE.set(Mutex::new(state));
 }
@@ -879,6 +911,30 @@ fn relayout_widget(hwnd: HWND) {
         return;
     };
     let probe = probe_taskbar(debug_config);
+    let layout = taskbar::position_in_taskbar(hwnd, &probe, debug_config);
+    sync_widget_visibility(hwnd, &layout, debug_config);
+}
+
+fn relayout_widget_if_taskbar_changed(hwnd: HWND) {
+    let Some(debug_config) = DEBUG_CONFIG.get() else {
+        return;
+    };
+    let probe = probe_taskbar(debug_config);
+    let Some(fingerprint) = taskbar::layout_fingerprint(hwnd, &probe) else {
+        return;
+    };
+    let Some(state_lock) = WIDGET_RUNTIME_STATE.get() else {
+        return;
+    };
+    let Ok(mut state) = state_lock.lock() else {
+        return;
+    };
+    if state.last_taskbar_layout_fingerprint.as_ref() == Some(&fingerprint) {
+        return;
+    }
+    state.last_taskbar_layout_fingerprint = Some(fingerprint);
+    drop(state);
+
     let layout = taskbar::position_in_taskbar(hwnd, &probe, debug_config);
     sync_widget_visibility(hwnd, &layout, debug_config);
 }
@@ -1001,14 +1057,40 @@ fn store_settings_hwnd(hwnd: HWND) {
 }
 
 fn current_settings_hwnd() -> Option<HWND> {
-    SETTINGS_HWND
+    let hwnd = SETTINGS_HWND
         .get()
         .and_then(|lock| {
             lock.lock()
                 .ok()
                 .map(|value| HWND(*value as *mut std::ffi::c_void))
         })
-        .filter(|hwnd| hwnd.0 != ptr::null_mut())
+        .filter(|hwnd| hwnd.0 != ptr::null_mut());
+
+    if let Some(hwnd) = hwnd
+        && unsafe { IsWindow(hwnd).as_bool() }
+    {
+        return Some(hwnd);
+    }
+
+    if hwnd.is_some() {
+        store_settings_hwnd(HWND::default());
+    }
+    None
+}
+
+fn ensure_fallback_settings_window() -> Result<HWND> {
+    if let Some(hwnd) = current_settings_hwnd() {
+        return Ok(hwnd);
+    }
+
+    let hmodule = unsafe { GetModuleHandleW(None) }?;
+    let hwnd = settings_window::create_window(
+        HINSTANCE(hmodule.0),
+        current_app_status_snapshot(),
+        settings_bridge::current_config(),
+    )?;
+    store_settings_hwnd(hwnd);
+    Ok(hwnd)
 }
 
 fn current_app_status_snapshot() -> AppStatusSnapshot {

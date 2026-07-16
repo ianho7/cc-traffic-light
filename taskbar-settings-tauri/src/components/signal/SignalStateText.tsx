@@ -11,7 +11,6 @@ export default function SignalStateText({ label }: SignalStateTextProps) {
       style={{
         fontSize: 90,
         fontWeight: 950,
-        letterSpacing: "",
         lineHeight: 1
       }}
     >

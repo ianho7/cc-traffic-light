@@ -22,9 +22,9 @@ export default function SettingsShell({ items, activeId, onPageChange, children 
         items={items}
         onChange={onPageChange}
       />
-      <main className="main">
+      <div className="main">
         {children}
-      </main>
+      </div>
     </div>
   );
 }

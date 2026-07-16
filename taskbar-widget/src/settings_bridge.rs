@@ -5,13 +5,13 @@ use shared_core::{
     settings_service::{SettingsService, SettingsServiceError},
     tauri_ipc::{
         HookDiagnosticPathsDto, HookDiagnosticsDto, HookStatus, HookStatusDto,
-        RuntimeLogDiagnosticsDto,
-        SettingsSaveResultDto,
+        RuntimeLogDiagnosticsDto, SettingsSaveResultDto,
     },
 };
 use taskbar_widget::{
     agent_state,
     app_config::{self, AppConfig},
+    i18n,
     ui_state::{AppStatusSnapshot, SourceId},
 };
 use windows::Win32::{
@@ -47,8 +47,15 @@ impl SettingsService for HostSettingsBridge {
 }
 
 pub fn initialize(snapshot: AppStatusSnapshot, config: AppConfig) {
-    let _ = SETTINGS_SNAPSHOT.set(Mutex::new(snapshot));
-    let _ = SETTINGS_CONFIG.set(Mutex::new(config));
+    let snapshot_lock = SETTINGS_SNAPSHOT.get_or_init(|| Mutex::new(snapshot.clone()));
+    if let Ok(mut current) = snapshot_lock.lock() {
+        *current = snapshot;
+    }
+
+    let config_lock = SETTINGS_CONFIG.get_or_init(|| Mutex::new(config.clone()));
+    if let Ok(mut current) = config_lock.lock() {
+        *current = config;
+    }
 }
 
 pub fn bind_main_window(hwnd: HWND) {
@@ -62,6 +69,15 @@ pub fn register_settings_window(hwnd: HWND) {
     let lock = SETTINGS_WINDOW_HWND.get_or_init(|| Mutex::new(0));
     if let Ok(mut current) = lock.lock() {
         *current = hwnd.0 as isize;
+    }
+}
+
+pub fn unregister_settings_window(hwnd: HWND) {
+    if let Some(lock) = SETTINGS_WINDOW_HWND.get()
+        && let Ok(mut current) = lock.lock()
+        && *current == hwnd.0 as isize
+    {
+        *current = 0;
     }
 }
 
@@ -91,7 +107,22 @@ pub fn current_config() -> AppConfig {
 }
 
 pub fn refresh_config_from_disk() -> AppConfig {
-    let next = app_config::load_config_diagnostic().config;
+    let mut result = app_config::load_config_diagnostic();
+    let language_initialized = i18n::resolve_persisted_language(
+        &mut result.config,
+        matches!(
+            result.outcome,
+            app_config::ConfigLoadOutcome::CreatedDefaultFile
+        ),
+    );
+    let autostart_before_sync = result.config.general.autostart_enabled;
+    autostart::sync_config_flag(&mut result.config);
+    let autostart_synchronized =
+        result.config.general.autostart_enabled != autostart_before_sync;
+    if language_initialized || autostart_synchronized {
+        let _ = app_config::save_config(&result.config);
+    }
+    let next = result.config;
     let lock = SETTINGS_CONFIG.get_or_init(|| Mutex::new(AppConfig::default_v1()));
     if let Ok(mut current) = lock.lock() {
         *current = next.clone();

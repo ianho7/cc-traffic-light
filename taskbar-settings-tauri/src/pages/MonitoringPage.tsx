@@ -4,7 +4,8 @@ import SourceNodeGrid from "../components/source/SourceNodeGrid";
 import SourceNodeCard from "../components/source/SourceNodeCard";
 import HookManagementPanel, { type HookFeedback } from "../components/monitoring/HookManagementPanel";
 import MonitoringDiagnosticsPanel from "../components/monitoring/MonitoringDiagnosticsPanel";
-import { sourceLabel } from "../lib/label-lookup";
+import AgentLabel, { type Agent } from "../components/shared/AgentLabel";
+import { m } from "../paraglide/messages.js";
 import {
   getHookDiagnostics,
   getHookStatus,
@@ -42,6 +43,7 @@ export default function MonitoringPage({
   onSettingChange
 }: MonitoringPageProps) {
   const [hookStatus, setHookStatus] = useState<HookStatusDto | null>(null);
+  const [hookStatusLoaded, setHookStatusLoaded] = useState(false);
   const [hookDiagnostics, setHookDiagnostics] = useState<HookDiagnosticsDto | null>(null);
   const [logDiagnostics, setLogDiagnostics] = useState<RuntimeLogDiagnosticsDto | null>(null);
   const [displaySnapshot, setDisplaySnapshot] = useState(snapshot);
@@ -54,7 +56,10 @@ export default function MonitoringPage({
   }, [snapshot]);
 
   useEffect(() => {
-    void getHookStatus().then(setHookStatus).catch(() => setHookStatus(null));
+    void getHookStatus()
+      .then(setHookStatus)
+      .catch(() => setHookStatus(null))
+      .finally(() => setHookStatusLoaded(true));
     void getHookDiagnostics().then(setHookDiagnostics).catch(() => setHookDiagnostics(null));
     void getRuntimeLogDiagnostics().then(setLogDiagnostics).catch(() => setLogDiagnostics(null));
   }, []);
@@ -68,6 +73,8 @@ export default function MonitoringPage({
     ]);
     if (snapshotResult.status === "fulfilled") setDisplaySnapshot(snapshotResult.value);
     if (hookStatusResult.status === "fulfilled") setHookStatus(hookStatusResult.value);
+    else setHookStatus(null);
+    setHookStatusLoaded(true);
     if (hookDiagnosticsResult.status === "fulfilled") setHookDiagnostics(hookDiagnosticsResult.value);
     if (logDiagnosticsResult.status === "fulfilled") setLogDiagnostics(logDiagnosticsResult.value);
   };
@@ -118,7 +125,7 @@ export default function MonitoringPage({
   const sources = [
     {
       id: "codex",
-      name: sourceLabel("codex"),
+      name: m.source_label_codex(),
       enabled: settings.monitoring.codex_enabled,
       state: displaySnapshot.sources["codex"]?.state ?? "idle",
       onToggle: () =>
@@ -129,7 +136,7 @@ export default function MonitoringPage({
     },
     {
       id: "claude",
-      name: sourceLabel("claude"),
+      name: m.source_label_claude(),
       enabled: settings.monitoring.claude_enabled,
       state: displaySnapshot.sources["claude"]?.state ?? "idle",
       onToggle: () =>
@@ -145,6 +152,7 @@ export default function MonitoringPage({
       <SourceNodeGrid>
         {sources.map((source) => (
           <SourceNodeCard
+            agent={source.id as Agent}
             disabled={pending}
             enabled={source.enabled}
             key={source.id}
@@ -169,12 +177,15 @@ export default function MonitoringPage({
         configPath={configPath}
         diagnostics={hookDiagnostics}
         logDiagnostics={logDiagnostics}
+        onRefresh={() => void handleRefresh()}
         onOpenLogDirectory={async () => {
           await openRuntimeLogDirectory();
           const diagnostics = await getRuntimeLogDiagnostics();
           setLogDiagnostics(diagnostics);
         }}
+        refreshing={refreshing}
         snapshot={displaySnapshot}
+        statusUnavailable={hookStatusLoaded && hookStatus === null}
       />
     </div>
   );

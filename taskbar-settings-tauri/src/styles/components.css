@@ -20,16 +20,25 @@
 
 .page-header h1 {
   font-size: 64px;
-  letter-spacing: -0.08em;
+  letter-spacing: 0;
   margin: 8px 0;
+}
+
+:lang(en) .page-header h1 {
+  letter-spacing: -0.03em;
 }
 
 /* ── Meta Label ── */
 .meta-label {
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.04em;
   color: #888;
+  margin: 1em 0;
   /* text-transform: uppercase; */
+}
+
+:lang(en) .meta-label {
+  letter-spacing: 0.16em;
 }
 
 /* ── Sub Text ── */
@@ -52,13 +61,21 @@
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
 }
 
+.pill--ui {
+  font-family: var(--ui, "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif);
+}
+
+.inline-key {
+  font-family: var(--mono, "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace);
+}
+
 /* ── Action Button ── */
 .action-button {
   border: 1px solid var(--ink, #151515);
   background: var(--ink, #151515);
   color: var(--paper, #fffefa);
   padding: 12px 24px;
-  font: 700 12px var(--mono, ui-monospace, Consolas, monospace);
+  font: 700 12px var(--ui, "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -121,6 +138,10 @@
 .hook-management-panel h2 {
   margin: 6px 0 4px;
   font-size: 18px;
+  letter-spacing: 0;
+}
+
+:lang(en) .hook-management-panel h2 {
   letter-spacing: -0.02em;
 }
 
@@ -161,7 +182,7 @@
 }
 
 .hook-management-row__actions,
-.hook-dialog__actions {
+.confirm-dialog__actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -206,6 +227,10 @@
 .monitoring-diagnostics-panel h2 {
   margin: 6px 0 4px;
   font-size: 18px;
+  letter-spacing: 0;
+}
+
+:lang(en) .monitoring-diagnostics-panel h2 {
   letter-spacing: -0.02em;
 }
 
@@ -220,6 +245,36 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   border-bottom: 1px solid var(--line, #deded8);
+}
+
+.monitoring-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line, #deded8);
+  border-left: 3px solid var(--yellow, #ffcc00);
+  background: var(--bg-note, #fafaf7);
+}
+
+.monitoring-recovery strong {
+  font-size: 13px;
+}
+
+.monitoring-recovery p {
+  max-width: 68ch;
+  margin: 3px 0 0;
+  color: var(--muted, #777);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.monitoring-recovery__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .monitoring-diagnostics-summary>div {
@@ -242,8 +297,13 @@
 .monitoring-path-row>span:first-child {
   color: var(--muted, #777);
   font: 700 10px var(--mono, ui-monospace, Consolas, monospace);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+:lang(en) .monitoring-diagnostics-summary span,
+:lang(en) .monitoring-path-row>span:first-child {
+  letter-spacing: 0.08em;
 }
 
 .monitoring-diagnostics-summary strong,
@@ -252,6 +312,10 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.monitoring-diagnostics-summary__technical {
+  font-family: var(--mono, "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace);
 }
 
 .monitoring-diagnostics-section {
@@ -266,8 +330,12 @@
 .monitoring-diagnostics-section h3 {
   margin: 0 0 10px;
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+:lang(en) .monitoring-diagnostics-section h3 {
+  letter-spacing: 0.12em;
 }
 
 .monitoring-diagnostics-panel__actions {
@@ -328,7 +396,7 @@
 }
 
 /* ── Hook Action Dialog ── */
-.hook-dialog-overlay {
+.confirm-dialog-overlay {
   position: fixed;
   z-index: 1000;
   inset: 0;
@@ -339,34 +407,42 @@
   animation: hook-overlay-in 140ms ease-out both;
 }
 
-.hook-dialog {
+.confirm-dialog {
   width: min(100%, 480px);
   border: 1px solid var(--ink, #151515);
   background: var(--paper, #fffefa);
   padding: 20px;
-  animation: hook-dialog-in 140ms ease-out both;
+  animation: confirm-dialog-in 140ms ease-out both;
 }
 
-.hook-dialog__eyebrow {
+.confirm-dialog__eyebrow {
   color: var(--muted, #777);
   font: 700 11px var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: 0.04em;
+}
+
+:lang(en) .confirm-dialog__eyebrow {
   letter-spacing: 0.14em;
 }
 
-.hook-dialog h2 {
+.confirm-dialog h2 {
   margin: 12px 0 8px;
   font-size: 22px;
+  letter-spacing: 0;
+}
+
+:lang(en) .confirm-dialog h2 {
   letter-spacing: -0.03em;
 }
 
-.hook-dialog p {
+.confirm-dialog p {
   margin: 0;
   color: var(--muted, #777);
   font-size: 13px;
   line-height: 1.6;
 }
 
-.hook-dialog__actions {
+.confirm-dialog__actions {
   margin-top: 24px;
 }
 
@@ -380,7 +456,7 @@
   }
 }
 
-@keyframes hook-dialog-in {
+@keyframes confirm-dialog-in {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -392,7 +468,10 @@
   }
 }
 
-@media (max-width: 760px) {
+/* The 240px sidebar and 72px main padding leave a 1100px window with less
+ * than 800px for a monitoring row, so switch before the viewport itself is
+ * narrow. */
+@media (max-width: 1180px) {
 
   .hook-management-panel__header,
   .hook-management-row {
@@ -407,15 +486,6 @@
     justify-self: start;
   }
 
-  .monitoring-diagnostics-panel__header {
-    display: grid;
-    gap: 12px;
-  }
-
-  .monitoring-diagnostics-panel__actions {
-    justify-content: flex-start;
-  }
-
   .hook-management-row {
     grid-template-columns: 1fr auto;
     gap: 10px 12px;
@@ -427,11 +497,31 @@
 
   .hook-management-row__actions {
     grid-column: 1 / -1;
-    justify-content: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .hook-management-row__actions .action-button {
-    flex: 1 1 0;
+    flex: 1 1 160px;
+    white-space: normal;
+  }
+
+}
+
+@media (max-width: 760px) {
+
+  .monitoring-diagnostics-panel__header {
+    display: grid;
+    gap: 12px;
+  }
+
+  .monitoring-diagnostics-panel__actions {
+    justify-content: flex-start;
+  }
+
+  .monitoring-recovery {
+    display: grid;
+    gap: 12px;
   }
 
   .monitoring-diagnostics-summary {
@@ -464,14 +554,34 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+.agent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 36px;
+  font-family: var(--ui, "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif);
+}
 
-  .hook-dialog-overlay,
-  .hook-dialog {
-    animation: none;
-  }
+.material-usage .agent-label {
+  font-family: var(--mono, "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace);
+}
 
-  .action-button:active:not(:disabled) {
-    transform: none;
-  }
+.agent-label__logo {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 16px;
+  object-fit: contain;
+}
+
+.agent-label--compact {
+  gap: 4px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.agent-label--compact .agent-label__logo {
+  width: 12px;
+  height: 12px;
+  flex-basis: 12px;
 }

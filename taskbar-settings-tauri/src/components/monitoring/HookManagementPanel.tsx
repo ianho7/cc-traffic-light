@@ -6,6 +6,7 @@ import MetaLabel from "../primitives/MetaLabel";
 import StatusBadge from "../primitives/StatusBadge";
 import HookActionDialog from "./HookActionDialog";
 import { m } from "../../paraglide/messages.js";
+import AgentLabel from "../shared/AgentLabel";
 
 type HookAgent = "codex" | "claude";
 type FeedbackTone = "success" | "error" | "neutral";
@@ -106,7 +107,7 @@ export default function HookManagementPanel({
             return (
               <div className="hook-management-row" key={source.agent}>
                 <div className="hook-management-row__source">
-                  <strong>{source.name}</strong>
+                  <strong><AgentLabel agent={source.agent}>{source.name}</AgentLabel></strong>
                   <code>{source.configKey}</code>
                 </div>
                 <StatusBadge label={detail.label} tone={detail.tone} />

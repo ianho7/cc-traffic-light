@@ -2,6 +2,30 @@
    Base — Global Styles for V2 Minimal Dot Matrix
    ================================================================ */
 
+@font-face {
+  font-family: "Geist";
+  src: url("../assets/font/Geist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../assets/font/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("../assets/font/HarmonyOS_Sans_SC_Regular.subset.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body, #root {
   min-height: 100%;
 }
@@ -10,7 +34,7 @@ body {
   margin: 0;
   background: var(--bg, #f5f5f2);
   color: var(--ink, #151515);
-  font-family: var(--ui, "SF Pro Display", "Segoe UI", Arial, sans-serif);
+  font-family: var(--ui, "Geist", "HarmonyOS Sans SC", "Segoe UI", Arial, sans-serif);
   user-select: none;
   -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
@@ -89,6 +113,10 @@ body::-webkit-scrollbar-thumb:hover {
   margin: 0;
   font-size: clamp(1.6rem, 4vw, 2.6rem);
   font-weight: 700;
+  letter-spacing: 0;
+}
+
+:lang(en) .loading-title {
   letter-spacing: -0.03em;
 }
 
@@ -108,10 +136,14 @@ body::-webkit-scrollbar-thumb:hover {
 
 .section-kicker {
   margin: 0;
-  font-family: var(--mono, ui-monospace, Consolas, monospace);
+  font-family: var(--mono, "Geist Mono", "HarmonyOS Sans SC", ui-monospace, Consolas, monospace);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted, #777);
+}
+
+:lang(en) .section-kicker {
+  letter-spacing: 0.08em;
 }

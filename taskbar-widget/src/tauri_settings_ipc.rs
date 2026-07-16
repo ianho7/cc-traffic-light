@@ -211,9 +211,9 @@ fn handle_request(request_bytes: &[u8]) -> SettingsIpcResponseEnvelope {
                 }
                 SettingsIpcCommand::OpenRuntimeLogDirectory => {
                     match settings_bridge::open_runtime_log_directory() {
-                        Ok(directory_path) => SettingsIpcResponse::OpenRuntimeLogDirectory {
-                            directory_path,
-                        },
+                        Ok(directory_path) => {
+                            SettingsIpcResponse::OpenRuntimeLogDirectory { directory_path }
+                        }
                         Err(error) => return response_error(request.request_id, error),
                     }
                 }

@@ -2,7 +2,8 @@ param(
     [switch]$SkipBuild,
     [ValidateSet("debug", "release")]
     [string]$Configuration = "debug",
-    [int]$TimeoutSeconds = 20
+    [int]$TimeoutSeconds = 20,
+    [bool]$CloseToTray = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,12 +51,31 @@ public static class LifecycleUser32 {
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
     public static IntPtr FindTopLevelWindowByProcessId(int processId) {
         var found = IntPtr.Zero;
         EnumWindows((hWnd, _) => {
             uint windowProcessId;
             GetWindowThreadProcessId(hWnd, out windowProcessId);
             if (windowProcessId == (uint)processId) {
+                found = hWnd;
+                return false;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return found;
+    }
+
+    public static IntPtr FindVisibleTopLevelWindowByProcessId(int processId) {
+        var found = IntPtr.Zero;
+        EnumWindows((hWnd, _) => {
+            uint windowProcessId;
+            GetWindowThreadProcessId(hWnd, out windowProcessId);
+            if (windowProcessId == (uint)processId && IsWindowVisible(hWnd)) {
                 found = hWnd;
                 return false;
             }
@@ -212,7 +232,7 @@ function Find-SettingsWindow {
 
     # The host's native fallback uses the same title, so title-only lookup is
     # unsafe. Always resolve the window through the settings process PID.
-    return [LifecycleUser32]::FindTopLevelWindowByProcessId($settingsProcesses[0].Id)
+    return [LifecycleUser32]::FindVisibleTopLevelWindowByProcessId($settingsProcesses[0].Id)
 }
 
 function Send-HostOpenSettings {
@@ -253,6 +273,11 @@ function Send-SettingsClose {
     }
 }
 
+function Test-SettingsWindowVisible {
+    $hwnd = Find-SettingsWindow
+    return $hwnd -ne [IntPtr]::Zero -and [LifecycleUser32]::IsWindowVisible($hwnd)
+}
+
 $hostProcessName = [System.IO.Path]::GetFileNameWithoutExtension($hostExe)
 $settingsProcessName = [System.IO.Path]::GetFileNameWithoutExtension($settingsExe)
 $startedHost = $null
@@ -267,6 +292,8 @@ $report = [ordered]@{
     open_spawned_once = $false
     reopen_reused_same_process = $false
     close_exited_process = $false
+    close_kept_process_running = $false
+    reopen_after_close_reused_process = $false
     reopen_after_close_spawned = $false
     reopen_after_forced_kill_spawned = $false
     host_shutdown_reaped_settings = $false
@@ -279,6 +306,9 @@ $report = [ordered]@{
 $oldHostSetting = $env:CC_TRAFFIC_LIGHT_SETTINGS_HOST
 $oldSettingsExe = $env:CC_TRAFFIC_LIGHT_TAURI_SETTINGS_EXE
 $oldRuntimeLog = $env:TASKBAR_MVP_RUNTIME_LOG_FILE
+$oldAppData = $env:APPDATA
+$isolatedAppData = Join-Path $reportDir ("appdata-" + [Guid]::NewGuid().ToString("N"))
+$configPath = Join-Path $isolatedAppData "CcTrafficLight\config.json"
 
 try {
     if ((Get-MatchingProcesses -ProcessName $hostProcessName -ExpectedPath $hostExe).Count -gt 0) {
@@ -291,6 +321,12 @@ try {
     $env:CC_TRAFFIC_LIGHT_SETTINGS_HOST = "tauri"
     $env:CC_TRAFFIC_LIGHT_TAURI_SETTINGS_EXE = $settingsExe
     $env:TASKBAR_MVP_RUNTIME_LOG_FILE = $runtimeLogPath
+    $env:APPDATA = $isolatedAppData
+    New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+    @{ schema_version = 7; general = @{ autostart_enabled = $false; close_to_tray = $CloseToTray } } |
+        ConvertTo-Json -Depth 4 | Set-Content -Path $configPath -Encoding UTF8
+    $report.close_to_tray = $CloseToTray
+    $report.config_path = $configPath
     if (Test-Path $runtimeLogPath) {
         Remove-Item -LiteralPath $runtimeLogPath -Force
     }
@@ -317,6 +353,10 @@ try {
     Wait-Until -Description "first settings window" -TimeoutSeconds $TimeoutSeconds -Condition {
         (Find-SettingsWindow) -ne [IntPtr]::Zero
     }
+    # The frontend invokes bootstrap_window after the native Tauri window exists;
+    # allow that initial settings read to synchronize close_to_tray before testing
+    # the close request.
+    Start-Sleep -Milliseconds 800
 
     Send-HostOpenSettings
     Start-Sleep -Milliseconds 800
@@ -329,20 +369,40 @@ try {
     }
 
     Send-SettingsClose
-    Wait-Until -Description "settings process to exit after close" -TimeoutSeconds $TimeoutSeconds -Condition {
-        (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 0
-    }
-    $report.close_exited_process = $true
+    if ($CloseToTray) {
+        Wait-Until -Description "settings process to remain after close-to-tray" -TimeoutSeconds $TimeoutSeconds -Condition {
+            (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 1
+        }
+        $report.close_kept_process_running = $true
 
-    Send-HostOpenSettings
-    Wait-Until -Description "settings process to respawn after close" -TimeoutSeconds $TimeoutSeconds -Condition {
-        (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 1
+        Send-HostOpenSettings
+        Wait-Until -Description "hidden settings window to be restored" -TimeoutSeconds $TimeoutSeconds -Condition {
+            Test-SettingsWindowVisible
+        }
+        $reopenedProcesses = Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe
+        if ($reopenedProcesses[0].Id -ne $report.first_settings_pid) {
+            throw "Close-to-tray did not reuse the existing settings process."
+        }
+        $report.reopen_after_close_reused_process = $true
+        $settingsPidToKill = $report.first_settings_pid
     }
-    $secondProcesses = Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe
-    $report.second_settings_pid = $secondProcesses[0].Id
-    $report.reopen_after_close_spawned = $true
+    else {
+        Wait-Until -Description "settings process to exit after close" -TimeoutSeconds $TimeoutSeconds -Condition {
+            (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 0
+        }
+        $report.close_exited_process = $true
 
-    Stop-Process -Id $report.second_settings_pid -Force
+        Send-HostOpenSettings
+        Wait-Until -Description "settings process to respawn after close" -TimeoutSeconds $TimeoutSeconds -Condition {
+            (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 1
+        }
+        $secondProcesses = Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe
+        $report.second_settings_pid = $secondProcesses[0].Id
+        $report.reopen_after_close_spawned = $true
+        $settingsPidToKill = $report.second_settings_pid
+    }
+
+    Stop-Process -Id $settingsPidToKill -Force
     Wait-Until -Description "forced-killed settings process to exit" -TimeoutSeconds $TimeoutSeconds -Condition {
         (Get-MatchingProcesses -ProcessName $settingsProcessName -ExpectedPath $settingsExe).Count -eq 0
     }
@@ -379,6 +439,7 @@ finally {
     $env:CC_TRAFFIC_LIGHT_SETTINGS_HOST = $oldHostSetting
     $env:CC_TRAFFIC_LIGHT_TAURI_SETTINGS_EXE = $oldSettingsExe
     $env:TASKBAR_MVP_RUNTIME_LOG_FILE = $oldRuntimeLog
+    $env:APPDATA = $oldAppData
 
     $report | ConvertTo-Json -Depth 4 | Set-Content -Path $reportPath -Encoding UTF8
 }

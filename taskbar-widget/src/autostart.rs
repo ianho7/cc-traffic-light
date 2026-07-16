@@ -16,8 +16,14 @@ const RUN_VALUE_NAME: &str = "CcTrafficLight";
 
 pub fn sync_config_flag(config: &mut AppConfig) {
     if let Ok(enabled) = is_enabled() {
-        config.general.autostart_enabled = enabled;
+        apply_enabled_state(config, enabled);
     }
+}
+
+fn apply_enabled_state(config: &mut AppConfig, enabled: bool) -> bool {
+    let changed = config.general.autostart_enabled != enabled;
+    config.general.autostart_enabled = enabled;
+    changed
 }
 
 pub fn is_enabled() -> Result<bool> {
@@ -114,5 +120,21 @@ impl Drop for RegistryKey {
         unsafe {
             let _ = RegCloseKey(self.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_enabled_state;
+    use taskbar_widget::app_config::AppConfig;
+
+    #[test]
+    fn registry_state_overrides_a_stale_persisted_flag() {
+        let mut config = AppConfig::default_v1();
+        config.general.autostart_enabled = true;
+
+        assert!(apply_enabled_state(&mut config, false));
+        assert!(!config.general.autostart_enabled);
+        assert!(!apply_enabled_state(&mut config, false));
     }
 }

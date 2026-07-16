@@ -48,7 +48,6 @@ $pageIds = @(
 
 $configBindings = @(
     "draft.general.autostart_enabled",
-    "draft.general.start_minimized_to_tray",
     "draft.general.close_to_tray",
     "draft.localization.language",
     "draft.monitoring.codex_enabled",

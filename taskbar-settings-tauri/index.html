@@ -1,12 +1,126 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CC Traffic Light Settings</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-  </html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CC Traffic Light Settings</title>
+  <style>
+    html,
+    body,
+    #root {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: #f5f5f2;
+      color: #151515;
+    }
+
+    #startup-loader {
+      position: fixed;
+      z-index: 9999;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background: #f5f5f2;
+      opacity: 1;
+      transition: opacity 120ms ease-out;
+    }
+
+    #startup-loader.is-leaving {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .startup-loader__content {
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+      text-align: center;
+    }
+
+    .startup-loader__brand {
+      font: 700 11px ui-monospace, Consolas, monospace;
+      letter-spacing: .14em;
+    }
+
+    .startup-loader__signals {
+      display: flex;
+      gap: 7px;
+      padding: 7px;
+      border-radius: 16px;
+      background: #111;
+    }
+
+    .startup-loader__signal {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #222;
+      animation: startup-signal 540ms linear infinite;
+    }
+
+    .startup-loader__signal:nth-child(1) {
+      --signal-color: #34c759;
+      animation-delay: 0ms;
+    }
+
+    .startup-loader__signal:nth-child(2) {
+      --signal-color: #ffcc00;
+      animation-delay: 180ms;
+    }
+
+    .startup-loader__signal:nth-child(3) {
+      --signal-color: #ff3b30;
+      animation-delay: 360ms;
+    }
+
+    .startup-loader__message {
+      margin: 0;
+      color: #777;
+      font: 13px "Segoe UI", Arial, sans-serif;
+    }
+
+    @keyframes startup-signal {
+
+      0%,
+      31% {
+        background: var(--signal-color);
+        box-shadow: 0 0 14px color-mix(in srgb, var(--signal-color) 55%, transparent);
+      }
+
+      32%,
+      100% {
+        background: #222;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <div id="startup-loader" role="status" aria-live="polite">
+    <div class="startup-loader__content">
+      <div class="startup-loader__brand">CC TRAFFIC LIGHT</div>
+      <div class="startup-loader__signals" aria-hidden="true">
+        <i class="startup-loader__signal"></i>
+        <i class="startup-loader__signal"></i>
+        <i class="startup-loader__signal"></i>
+      </div>
+      <p class="startup-loader__message" data-en="Loading…" data-zh="正在启动…">Starting settings…</p>
+    </div>
+  </div>
+  <script>
+    if (navigator.language.toLowerCase().startsWith("zh")) {
+      const message = document.querySelector(".startup-loader__message");
+      if (message) message.textContent = message.dataset.zh;
+    }
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

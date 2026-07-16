@@ -26,7 +26,7 @@ export default function AboutPage({ about }: AboutPageProps) {
           <div>
             <div
               className="about-label"
-              style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.05em" }}
+              style={{ fontSize: 24, fontWeight: 900 }}
             >
               {m.about_product()}
             </div>
@@ -44,7 +44,11 @@ export default function AboutPage({ about }: AboutPageProps) {
           </div>
           <div
             className="about-product"
-            style={{ fontSize: 34, fontWeight: 900, letterSpacing: "-0.06em" }}
+            style={{
+              font: "950 60px var(--ui)",
+              letterSpacing: "-0.12em",
+              lineHeight: 1
+            }}
           >
             {about.product_name}
           </div>
@@ -64,7 +68,7 @@ export default function AboutPage({ about }: AboutPageProps) {
           <div>
             <div
               className="about-label"
-              style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.05em" }}
+              style={{ fontSize: 24, fontWeight: 900 }}
             >
               {m.about_version()}
             </div>
@@ -83,7 +87,7 @@ export default function AboutPage({ about }: AboutPageProps) {
           <div
             className="version"
             style={{
-              font: "950 100px var(--mono)",
+              font: "950 60px var(--mono)",
               letterSpacing: "-0.12em",
               lineHeight: 1
             }}

@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use crate::{settings_bridge, win32};
 use taskbar_widget::{
     app_config::{AppConfig, SettingsPage},
@@ -12,11 +14,11 @@ use windows::{
             SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
         },
         UI::WindowsAndMessaging::{
-            CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetClientRect, HideCaret,
-            IDC_ARROW, LoadCursorW, RegisterClassW, SW_HIDE, SW_SHOW, SetForegroundWindow,
-            ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONUP, WM_PAINT, WNDCLASSW, WS_CAPTION,
-            WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW, WS_OVERLAPPED, WS_SYSMENU,
-            WS_VISIBLE,
+            CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect,
+            HideCaret, IDC_ARROW, LoadCursorW, RegisterClassW, SW_HIDE, SW_SHOW,
+            SetForegroundWindow, ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONUP, WM_NCDESTROY,
+            WM_PAINT, WNDCLASSW, WS_CAPTION, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+            WS_OVERLAPPED, WS_SYSMENU, WS_VISIBLE,
         },
     },
     core::{Error, Result, w},
@@ -26,6 +28,7 @@ const SETTINGS_CLASS_NAME: windows::core::PCWSTR = w!("CcTrafficLightSettingsWin
 const SETTINGS_TITLE: windows::core::PCWSTR = w!("CC Traffic Light Settings");
 const SETTINGS_WIDTH: i32 = 720;
 const SETTINGS_HEIGHT: i32 = 460;
+static SETTINGS_WINDOW_CLASS_REGISTERED: OnceLock<()> = OnceLock::new();
 
 const NAV_ITEMS: [(SettingsPage, &str); 6] = [
     (SettingsPage::Overview, "OVERVIEW"),
@@ -43,7 +46,7 @@ struct LayoutRects {
     top_rect: RECT,
     codex_rect: RECT,
     claude_rect: RECT,
-    general_rows: [RECT; 3],
+    general_rows: [RECT; 2],
     diagnostics_card: RECT,
     diagnostics_refresh_button: RECT,
 }
@@ -115,7 +118,17 @@ pub unsafe extern "system" fn window_proc(
             LRESULT(0)
         }
         WM_CLOSE => {
-            hide_window(hwnd);
+            if settings_bridge::current_config().general.close_to_tray {
+                hide_window(hwnd);
+            } else {
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                };
+            }
+            LRESULT(0)
+        }
+        WM_NCDESTROY => {
+            settings_bridge::unregister_settings_window(hwnd);
             LRESULT(0)
         }
         _ => unsafe { DefWindowProcW(hwnd, message, _wparam, lparam) },
@@ -123,6 +136,10 @@ pub unsafe extern "system" fn window_proc(
 }
 
 fn register_window_class(hinstance: HINSTANCE) -> Result<()> {
+    if SETTINGS_WINDOW_CLASS_REGISTERED.get().is_some() {
+        return Ok(());
+    }
+
     let class = WNDCLASSW {
         style: CS_HREDRAW | CS_VREDRAW,
         lpfnWndProc: Some(window_proc),
@@ -139,6 +156,8 @@ fn register_window_class(hinstance: HINSTANCE) -> Result<()> {
             return Err(Error::from_win32());
         }
     }
+
+    let _ = SETTINGS_WINDOW_CLASS_REGISTERED.set(());
 
     Ok(())
 }
@@ -400,13 +419,6 @@ fn paint_general(
     paint_toggle_row(
         hdc,
         layout.general_rows[1],
-        config.general.start_minimized_to_tray,
-        "Start minimized to tray",
-        "Do not foreground the settings window on startup.",
-    );
-    paint_toggle_row(
-        hdc,
-        layout.general_rows[2],
         config.general.close_to_tray,
         "Close window to tray",
         "Keep the process running when the settings window is closed.",
@@ -717,11 +729,7 @@ fn handle_left_click(hwnd: HWND, lparam: LPARAM) {
                     toggle_autostart(hwnd);
                 } else {
                     mutate_config(hwnd, |config| match index {
-                        1 => {
-                            config.general.start_minimized_to_tray =
-                                !config.general.start_minimized_to_tray
-                        }
-                        2 => config.general.close_to_tray = !config.general.close_to_tray,
+                        1 => config.general.close_to_tray = !config.general.close_to_tray,
                         _ => {}
                     });
                 }
@@ -840,12 +848,6 @@ fn compute_layout(client_rect: RECT) -> LayoutRects {
             top: content_rect.top + 176,
             right: card_right,
             bottom: content_rect.top + 224,
-        },
-        RECT {
-            left: card_left,
-            top: content_rect.top + 240,
-            right: card_right,
-            bottom: content_rect.top + 288,
         },
     ];
     let diagnostics_card = RECT {

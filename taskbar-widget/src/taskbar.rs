@@ -259,6 +259,13 @@ pub struct TaskbarProbe {
     pub position_anchor: HWND,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TaskbarLayoutFingerprint {
+    parent_rect: [i32; 4],
+    anchor_rect: [i32; 4],
+    occupied_rects: Vec<[i32; 4]>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct TaskbarAttachResult {
     pub attempted: bool,
@@ -669,6 +676,32 @@ pub fn position_in_taskbar(
     };
 
     result
+}
+
+/// Captures only the taskbar geometry that can change the widget's placement.
+/// The caller can poll this cheaply and invoke a full relayout only on change.
+pub fn layout_fingerprint(hwnd: HWND, probe: &TaskbarProbe) -> Option<TaskbarLayoutFingerprint> {
+    if !is_valid_window(hwnd) || !is_valid_window(probe.host_parent) {
+        return None;
+    }
+
+    let parent_rect = win32::rect_for_window(probe.host_parent)?;
+    let anchor = first_valid_window(probe.position_anchor, probe.host_parent);
+    let anchor_rect = win32::rect_for_window(anchor).unwrap_or(parent_rect);
+    let occupied_rects = collect_peer_widget_rects(hwnd, probe, &parent_rect)
+        .into_iter()
+        .map(rect_signature)
+        .collect();
+
+    Some(TaskbarLayoutFingerprint {
+        parent_rect: rect_signature(parent_rect),
+        anchor_rect: rect_signature(anchor_rect),
+        occupied_rects,
+    })
+}
+
+fn rect_signature(rect: RECT) -> [i32; 4] {
+    [rect.left, rect.top, rect.right, rect.bottom]
 }
 
 fn resolve_module_left(

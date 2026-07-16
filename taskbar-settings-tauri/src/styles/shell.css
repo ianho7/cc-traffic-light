@@ -7,19 +7,32 @@
   z-index: 1;
   display: grid;
   grid-template-columns: var(--sidebar-width, 240px) 1fr;
-  min-height: 100vh;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
 }
 
 .main {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-panel {
+  height: 100%;
+  min-height: 0;
   padding: var(--space-9, 36px);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
-  .main {
+
+  .main-panel {
     padding: var(--space-5, 20px);
   }
 }

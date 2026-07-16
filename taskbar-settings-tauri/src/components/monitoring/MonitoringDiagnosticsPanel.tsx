@@ -5,13 +5,17 @@ import { m } from "../../paraglide/messages.js";
 import ActionButton from "../shared/ActionButton";
 import BaseCard from "../primitives/BaseCard";
 import MetaLabel from "../primitives/MetaLabel";
+import AgentLabel from "../shared/AgentLabel";
 
 interface MonitoringDiagnosticsPanelProps {
   configPath: string;
   diagnostics: { codex: HookDiagnosticPathsDto; claude: HookDiagnosticPathsDto } | null;
   logDiagnostics: RuntimeLogDiagnosticsDto | null;
   onOpenLogDirectory: () => Promise<void>;
+  onRefresh: () => void;
+  refreshing: boolean;
   snapshot: StatusSnapshotView;
+  statusUnavailable: boolean;
 }
 
 type CopyState = { path: string; success: boolean } | null;
@@ -65,6 +69,9 @@ export default function MonitoringDiagnosticsPanel({
   diagnostics,
   logDiagnostics,
   onOpenLogDirectory,
+  onRefresh,
+  refreshing,
+  statusUnavailable,
   snapshot
 }: MonitoringDiagnosticsPanelProps) {
   const [copyState, setCopyState] = useState<CopyState>(null);
@@ -73,6 +80,12 @@ export default function MonitoringDiagnosticsPanel({
     const success = await copyPath(path);
     setCopyState({ path, success });
     window.setTimeout(() => setCopyState((current) => current?.path === path ? null : current), 1_800);
+  };
+  const openLogDirectory = () => {
+    setOpeningLogDirectory(true);
+    void onOpenLogDirectory()
+      .catch(() => undefined)
+      .finally(() => setOpeningLogDirectory(false));
   };
 
   return (
@@ -96,26 +109,40 @@ export default function MonitoringDiagnosticsPanel({
                 : m.monitoring_diagnostics_copy()}
             </ActionButton>
           ) : null}
-          <ActionButton
-            disabled={openingLogDirectory}
-            onClick={() => {
-              setOpeningLogDirectory(true);
-              void onOpenLogDirectory()
-                .catch(() => undefined)
-                .finally(() => setOpeningLogDirectory(false));
-            }}
-            size="compact"
-            variant="secondary"
-          >
-            {openingLogDirectory ? m.monitoring_diagnostics_opening_logs() : m.monitoring_diagnostics_open_logs()}
-          </ActionButton>
+          {statusUnavailable ? null : (
+            <ActionButton
+              disabled={openingLogDirectory}
+              onClick={openLogDirectory}
+              size="compact"
+              variant="secondary"
+            >
+              {openingLogDirectory ? m.monitoring_diagnostics_opening_logs() : m.monitoring_diagnostics_open_logs()}
+            </ActionButton>
+          )}
         </div>
       </div>
 
+      {statusUnavailable ? (
+        <section className="monitoring-recovery" aria-label={m.monitoring_unknown_recovery_title()}>
+          <div>
+            <strong>{m.monitoring_unknown_recovery_title()}</strong>
+            <p>{m.monitoring_unknown_recovery_note()}</p>
+          </div>
+          <div className="monitoring-recovery__actions">
+            <ActionButton disabled={refreshing} onClick={onRefresh} size="compact" variant="secondary">
+              {refreshing ? m.monitoring_refreshing() : m.monitoring_unknown_recovery_refresh()}
+            </ActionButton>
+            <ActionButton disabled={openingLogDirectory} onClick={openLogDirectory} size="compact" variant="secondary">
+              {openingLogDirectory ? m.monitoring_diagnostics_opening_logs() : m.monitoring_diagnostics_open_logs()}
+            </ActionButton>
+          </div>
+        </section>
+      ) : null}
+
       <div className="monitoring-diagnostics-summary">
         <div><span>{m.monitoring_diagnostics_config_path()}</span><code title={configPath}>{configPath}</code></div>
-        <div><span>{m.monitoring_diagnostics_mount_state()}</span><strong>{stateLabel(snapshot.widget_mount_state)}</strong></div>
-        <div><span>{m.monitoring_diagnostics_last_refresh()}</span><strong>{formatTimestamp(snapshot.last_detection_refresh_at)}</strong></div>
+        <div><span>{m.monitoring_diagnostics_mount_state()}</span><strong className="monitoring-diagnostics-summary__technical">{stateLabel(snapshot.widget_mount_state)}</strong></div>
+        <div><span>{m.monitoring_diagnostics_last_refresh()}</span><strong className="monitoring-diagnostics-summary__technical">{formatTimestamp(snapshot.last_detection_refresh_at)}</strong></div>
         <div><span>{m.monitoring_diagnostics_last_error()}</span><strong title={snapshot.last_error_summary ?? undefined}>{snapshot.last_error_summary ?? m.label_none()}</strong></div>
       </div>
 
@@ -126,7 +153,7 @@ export default function MonitoringDiagnosticsPanel({
           const agentName = agent === "codex" ? m.source_label_codex() : m.source_label_claude();
           return (
             <div className="monitoring-path-group" key={agent}>
-              <strong>{agentName}</strong>
+              <strong><AgentLabel agent={agent}>{agentName}</AgentLabel></strong>
               {paths ? (
                 <div className="monitoring-path-group__rows">
                   <PathRow available={paths.config_exists} copyState={copyState} label={m.monitoring_diagnostics_current_config()} onCopy={(path) => void copy(path)} path={paths.config_path} />

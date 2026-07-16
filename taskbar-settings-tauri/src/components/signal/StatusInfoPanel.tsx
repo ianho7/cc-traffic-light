@@ -17,13 +17,13 @@ export default function StatusInfoPanel({
 }: StatusInfoPanelProps) {
   return (
     <div className="status-info-panel" style={{ padding: 18 }}>
-      <div style={{ padding: 12, paddingLeft: 0, borderBottom: "1px solid var(--line)", font: "700 12px var(--mono)" }}>
+      <div className="status-info-panel__row">
         <MetaLabel>{m.info_data_source()}</MetaLabel>
-        <div style={{ marginTop: 4 }}>{backendLabel}</div>
+        <div className="status-info-panel__value">{backendLabel}</div>
       </div>
-      <div style={{ padding: 12, paddingLeft: 0, borderBottom: "1px solid var(--line)", font: "700 12px var(--mono)" }}>
+      <div className="status-info-panel__row">
         <MetaLabel>{m.info_last_update()}</MetaLabel>
-        <div style={{ marginTop: 4 }}>{lastRefreshAt}</div>
+        <div className="status-info-panel__value">{lastRefreshAt}</div>
       </div>
       {/* <div style={{ padding: 12, borderBottom: "1px solid var(--line)", font: "700 12px var(--mono)" }}>
         <MetaLabel>ERROR</MetaLabel>

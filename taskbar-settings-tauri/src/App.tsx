@@ -26,6 +26,14 @@ import type {
 
 type Tone = "ok" | "warn" | "error" | "idle";
 
+function dismissStartupLoader() {
+  const loader = document.getElementById("startup-loader");
+  if (!loader || loader.classList.contains("is-leaving")) return;
+
+  loader.classList.add("is-leaving");
+  window.setTimeout(() => loader.remove(), 120);
+}
+
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
@@ -34,6 +42,10 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
+  }
+
+  componentDidCatch() {
+    dismissStartupLoader();
   }
 
   render() {
@@ -67,27 +79,8 @@ function normalizeVisiblePage(page: SettingsPageId | "material_library"): Settin
   return VISIBLE_PAGE_IDS.includes(page) ? page : "general";
 }
 
-/**
- * Resolve the stored language config to a Paraglide locale and call setLocale.
- */
 function applyLanguageSetting(language: AppConfig["localization"]["language"]): void {
-  if (language === "zh-CN" || language === "en") {
-    setLocale(language === "zh-CN" ? "zh-CN" : "en");
-    return;
-  }
-  // follow_system → detect from browser
-  const candidates = navigator.languages.length > 0 ? navigator.languages : [navigator.language];
-  for (const candidate of candidates) {
-    if (candidate.toLowerCase().startsWith("zh")) {
-      setLocale("zh-CN");
-      return;
-    }
-    if (candidate.toLowerCase().startsWith("en")) {
-      setLocale("en");
-      return;
-    }
-  }
-  setLocale("en");
+  setLocale(language, { reload: false });
 }
 
 function App() {
@@ -111,6 +104,12 @@ function App() {
         );
       });
   }, []);
+
+  useEffect(() => {
+    if (bootstrap || bootstrapError) {
+      dismissStartupLoader();
+    }
+  }, [bootstrap, bootstrapError]);
 
   useEffect(() => {
     if (!bootstrap) {
@@ -162,9 +161,7 @@ function App() {
   useEffect(() => {
     document.title = m.document_title();
     if (bootstrap) {
-      document.documentElement.lang = bootstrap.settings.localization.language === "follow_system"
-        ? navigator.language
-        : bootstrap.settings.localization.language;
+      document.documentElement.lang = bootstrap.settings.localization.language;
     }
   });
 

@@ -1,6 +1,7 @@
 import type { StatusSnapshotView } from "../types";
 import SignalDesk from "../components/signal/SignalDesk";
 import AgentStatusCard from "../components/status/AgentStatusCard";
+import type { Agent } from "../components/shared/AgentLabel";
 import { sourceLabel, stateLabel, formatTimestamp } from "../lib/label-lookup";
 import { m } from "../paraglide/messages.js";
 
@@ -38,7 +39,7 @@ export default function OverviewPage({ snapshot, fakeMode, pending }: OverviewPa
     .join(" | ");
 
   return (
-    <div className="page-body">
+    <div className="page-body overview-body">
       <SignalDesk
         activeTone={activeTone}
         backendLabel={fakeMode ? m.shell_fake_backend() : m.shell_live_backend()}
@@ -52,6 +53,7 @@ export default function OverviewPage({ snapshot, fakeMode, pending }: OverviewPa
       <div className="agents" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 20 }}>
         {sourceEntries.map(([key, source]) => (
           <AgentStatusCard
+            agent={key as Agent}
             key={key}
             name={sourceLabel(key)}
             activeTone={statusTone(source.state)}
