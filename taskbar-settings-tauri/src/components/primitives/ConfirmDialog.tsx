@@ -17,6 +17,11 @@ interface ConfirmDialogProps {
   returnFocusRef: RefObject<HTMLButtonElement | null>;
 }
 
+type DialogContent = Pick<
+  ConfirmDialogProps,
+  "ariaLabel" | "eyebrow" | "title" | "description" | "cancelLabel" | "confirmLabel" | "submittingLabel"
+>;
+
 /** Accessible modal confirmation for destructive actions. */
 export default function ConfirmDialog({
   open,
@@ -34,13 +39,70 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastOpenContentRef = useRef<DialogContent>({
+    ariaLabel,
+    eyebrow,
+    title,
+    description,
+    cancelLabel,
+    confirmLabel,
+    submittingLabel
+  });
+  const [mounted, setMounted] = useState(open);
+  const [closing, setClosing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const locked = busy || submitting;
+  const locked = busy || submitting || closing;
   const lockedRef = useRef(locked);
+
+  if (open) {
+    lastOpenContentRef.current = {
+      ariaLabel,
+      eyebrow,
+      title,
+      description,
+      cancelLabel,
+      confirmLabel,
+      submittingLabel
+    };
+  }
+
+  const displayedContent = open
+    ? { ariaLabel, eyebrow, title, description, cancelLabel, confirmLabel, submittingLabel }
+    : lastOpenContentRef.current;
 
   useEffect(() => {
     lockedRef.current = locked;
   }, [locked]);
+
+  useEffect(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+
+    if (open) {
+      setMounted(true);
+      setClosing(false);
+      return;
+    }
+
+    if (!mounted) return;
+
+    setClosing(true);
+    closeTimeoutRef.current = setTimeout(() => {
+      setMounted(false);
+      setClosing(false);
+      closeTimeoutRef.current = null;
+    }, 120);
+
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+    };
+  }, [mounted, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,12 +139,12 @@ export default function ConfirmDialog({
     };
   }, [onCancel, open, returnFocusRef]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <div
-      aria-label={ariaLabel}
-      className="confirm-dialog-overlay"
+      aria-label={displayedContent.ariaLabel}
+      className={`confirm-dialog-overlay${closing ? " confirm-dialog-overlay--closing" : ""}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !locked) onCancel();
       }}
@@ -91,13 +153,14 @@ export default function ConfirmDialog({
         aria-describedby="confirm-dialog-description"
         aria-labelledby="confirm-dialog-title"
         aria-modal="true"
-        className="confirm-dialog"
+        className={`confirm-dialog${closing ? " confirm-dialog--closing" : ""}`}
+        inert={closing}
         ref={dialogRef}
         role="dialog"
       >
-        <div className="confirm-dialog__eyebrow">{eyebrow}</div>
-        <h2 id="confirm-dialog-title">{title}</h2>
-        <p id="confirm-dialog-description">{description}</p>
+        <div className="confirm-dialog__eyebrow">{displayedContent.eyebrow}</div>
+        <h2 id="confirm-dialog-title">{displayedContent.title}</h2>
+        <p id="confirm-dialog-description">{displayedContent.description}</p>
         <div className="confirm-dialog__actions">
           <ActionButton
             disabled={locked}
@@ -105,7 +168,7 @@ export default function ConfirmDialog({
             size="compact"
             variant="secondary"
           >
-            {cancelLabel}
+            {displayedContent.cancelLabel}
           </ActionButton>
           <ActionButton
             disabled={locked}
@@ -116,7 +179,7 @@ export default function ConfirmDialog({
             size="compact"
             variant="danger"
           >
-            {locked ? submittingLabel : confirmLabel}
+            {locked ? displayedContent.submittingLabel : displayedContent.confirmLabel}
           </ActionButton>
         </div>
       </section>

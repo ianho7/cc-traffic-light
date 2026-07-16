@@ -286,8 +286,12 @@ export default function MaterialGroupsSection({
                 </ActionButton>
               </div>
             </div>
-            {builtinOpen ? (
-              <div className="material-built-in-settings">
+            <div className={`material-built-in-settings-wrapper${builtinOpen ? " material-built-in-settings-wrapper--open" : ""}`}>
+              <div
+                aria-hidden={!builtinOpen}
+                className="material-built-in-settings"
+                inert={!builtinOpen}
+              >
                 <div className="appearance-materials__section-heading">
                   <span className="meta-label">{m.appearance_default_section()}</span>
                   <p>{m.appearance_default_note()}</p>
@@ -363,7 +367,7 @@ export default function MaterialGroupsSection({
                   </ActionButton>
                 </div>
               </div>
-            ) : null}
+            </div>
         </article>
       </section>
 

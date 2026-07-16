@@ -14,6 +14,9 @@
   --yellow: #ffcc00;
   --red: #ff3b30;
 
+  /* ── 动效 ── */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
   /* ── 语义色变体 ── */
   --bg-sidebar: #fafaf7;
   --bg-note: #fafaf7;
