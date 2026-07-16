@@ -211,6 +211,8 @@
   "about_note": "Current settings shell essentials",
   "about_product": "Product",
   "about_version": "Version",
+  "about_open_source": "Open source",
+  "about_view_on_github": "View project on GitHub ↗",
   "label_none": "none",
   "label_pending": "pending",
   "label_on": "ON",

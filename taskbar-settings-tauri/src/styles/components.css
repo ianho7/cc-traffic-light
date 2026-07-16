@@ -570,6 +570,26 @@
 
 @media (max-width: 760px) {
 
+  .about-row {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    padding: 24px !important;
+  }
+
+  .about-product,
+  .version {
+    font-size: 42px !important;
+  }
+
+  .about-project__url {
+    overflow-wrap: anywhere;
+  }
+
+  .about-project {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .monitoring-diagnostics-panel__header {
     display: grid;
     gap: 12px;
@@ -612,6 +632,21 @@
   .monitoring-path-row__availability {
     justify-self: start;
   }
+}
+
+.about-project {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.about-project__url {
+  color: var(--ink, #20201d);
+  font: 800 18px var(--mono);
+  letter-spacing: -0.04em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .agent-label {

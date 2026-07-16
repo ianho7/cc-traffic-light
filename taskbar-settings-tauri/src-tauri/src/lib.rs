@@ -547,7 +547,8 @@ fn get_material_group_previews(
 }
 
 fn material_preview_data_url(path: &str) -> Result<String, String> {
-    let bytes = fs::read(path).map_err(|error| format!("failed to read material preview: {error}"))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("failed to read material preview: {error}"))?;
     validate_material_png(&bytes)?;
     Ok(format!("data:image/png;base64,{}", BASE64.encode(bytes)))
 }
@@ -867,6 +868,7 @@ fn uninstall_claude_hooks() -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(WindowBehaviorState::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

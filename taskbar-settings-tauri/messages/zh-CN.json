@@ -211,6 +211,8 @@
   "about_note": "当前 settings shell 基本信息",
   "about_product": "产品",
   "about_version": "版本",
+  "about_open_source": "开源项目",
+  "about_view_on_github": "在 GitHub 上查看项目 ↗",
   "label_none": "无",
   "label_pending": "等待中",
   "label_on": "开",
