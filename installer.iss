@@ -1,6 +1,6 @@
 ; installer.iss
 #define MyAppName "CC Traffic Light"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Ian Ho"
 #define MyAppExeName "CC Traffic Light.exe"
 

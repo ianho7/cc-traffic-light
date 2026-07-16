@@ -1,6 +1,7 @@
 {
   "name": "cc-traffic-light-workspace",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
     "build": "powershell -ExecutionPolicy Bypass -File ./scripts/rebuild-all.ps1",
     "build:frontend": "pnpm -C taskbar-settings-tauri build",
@@ -8,6 +9,8 @@
     "settings:build": "pnpm -C taskbar-settings-tauri build",
     "settings:tauri:dev": "pnpm -C taskbar-settings-tauri tauri dev",
     "settings:tauri:build": "pnpm -C taskbar-settings-tauri tauri build",
-    "pack": "powershell -ExecutionPolicy Bypass -File ./scripts/pack-all.ps1"
+    "pack": "powershell -ExecutionPolicy Bypass -File ./scripts/pack-all.ps1",
+    "version:check": "powershell -ExecutionPolicy Bypass -File ./scripts/assert-version-sync.ps1",
+    "version:set": "powershell -ExecutionPolicy Bypass -File ./scripts/set-version.ps1"
   }
 }

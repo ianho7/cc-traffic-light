@@ -9,6 +9,8 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+& "$PSScriptRoot\assert-version-sync.ps1"
+
 function Invoke-Step {
     param(
         [Parameter(Mandatory = $true)]

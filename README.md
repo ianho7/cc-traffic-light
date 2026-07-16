@@ -66,6 +66,15 @@ pnpm build
 pnpm run build:frontend
 ```
 
+更新产品版本（Widget、Settings、Tauri、前端包和安装器保持一致）：
+
+```powershell
+pnpm run version:set -- 0.1.1
+pnpm run version:check
+```
+
+版本唯一来源是根目录 `Cargo.toml` 的 `[workspace.package].version`。常规构建和打包都会先校验版本一致性。
+
 检查与测试：
 
 ```powershell

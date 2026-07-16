@@ -8,6 +8,8 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+& "$PSScriptRoot\assert-version-sync.ps1"
+
 function Get-ArtifactPath {
     param(
         [Parameter(Mandatory = $true)]
