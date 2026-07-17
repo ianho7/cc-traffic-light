@@ -29,6 +29,13 @@ static MAIN_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 static SETTINGS_WINDOW_HWND: OnceLock<Mutex<isize>> = OnceLock::new();
 const HOOK_ACTIVITY_WINDOW_MS: u64 = 5 * 60 * 1_000;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ManagedHookConfiguration {
+    NotInstalled,
+    Ready,
+    NeedsReinstall,
+}
+
 pub struct HostSettingsBridge;
 
 impl SettingsService for HostSettingsBridge {
@@ -117,8 +124,7 @@ pub fn refresh_config_from_disk() -> AppConfig {
     );
     let autostart_before_sync = result.config.general.autostart_enabled;
     autostart::sync_config_flag(&mut result.config);
-    let autostart_synchronized =
-        result.config.general.autostart_enabled != autostart_before_sync;
+    let autostart_synchronized = result.config.general.autostart_enabled != autostart_before_sync;
     if language_initialized || autostart_synchronized {
         let _ = app_config::save_config(&result.config);
     }
@@ -448,12 +454,13 @@ fn detect_agent_hook_status(agent: &str) -> HookStatus {
     let hooks_path = agent_hook_config_path(agent);
 
     let hooks_text = std::fs::read_to_string(&hooks_path).ok();
-    let hooks_invalid = hooks_text
-        .as_deref()
-        .is_some_and(|text| serde_json::from_str::<serde_json::Value>(text).is_err());
-    let hooks_installed = hooks_text
-        .as_deref()
-        .is_some_and(|text| text.contains("CcTrafficLight") && text.contains(agent));
+    let hook_configuration = match hooks_text.as_deref() {
+        Some(text) => match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(config) => managed_hook_configuration(&config, agent, |path| path.is_file()),
+            Err(_) => return HookStatus::Error,
+        },
+        None => ManagedHookConfiguration::NotInstalled,
+    };
 
     let state_path = agent_state::state_file_path();
     let state_text = std::fs::read_to_string(&state_path).ok();
@@ -465,17 +472,11 @@ fn detect_agent_hook_status(agent: &str) -> HookStatus {
         .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
         .is_some_and(|value| state_has_recent_activity(&value, agent, agent_state::now_ms()));
 
-    classify_hook_status(
-        agent,
-        hooks_installed,
-        state_recent,
-        hooks_invalid || state_invalid,
-    )
+    classify_hook_status(hook_configuration, state_recent, state_invalid)
 }
 
 fn classify_hook_status(
-    _agent: &str,
-    hooks_installed: bool,
+    hook_configuration: ManagedHookConfiguration,
     state_recent: bool,
     has_error: bool,
 ) -> HookStatus {
@@ -483,12 +484,93 @@ fn classify_hook_status(
         return HookStatus::Error;
     }
 
-    match (hooks_installed, state_recent) {
-        (true, true) => HookStatus::Active,
-        (true, false) => HookStatus::ConfiguredUnverified,
-        (false, false) => HookStatus::NotInstalled,
-        _ => HookStatus::NotInstalled,
+    match (hook_configuration, state_recent) {
+        (ManagedHookConfiguration::NeedsReinstall, _) => HookStatus::NeedsReinstall,
+        (ManagedHookConfiguration::Ready, true) => HookStatus::Active,
+        (ManagedHookConfiguration::Ready, false) => HookStatus::ConfiguredUnverified,
+        (ManagedHookConfiguration::NotInstalled, _) => HookStatus::NotInstalled,
     }
+}
+
+fn managed_hook_configuration(
+    config: &serde_json::Value,
+    agent: &str,
+    path_exists: impl Fn(&std::path::Path) -> bool,
+) -> ManagedHookConfiguration {
+    let status_prefix = match agent {
+        "claude" => "CcTrafficLight Claude ",
+        _ => "CcTrafficLight Codex ",
+    };
+    let Some(events) = config.get("hooks").and_then(serde_json::Value::as_object) else {
+        return ManagedHookConfiguration::NotInstalled;
+    };
+
+    let mut found_managed_hook = false;
+    let mut paths_are_valid = true;
+    for entries in events.values().filter_map(serde_json::Value::as_array) {
+        for entry in entries {
+            let Some(handlers) = entry.get("hooks").and_then(serde_json::Value::as_array) else {
+                continue;
+            };
+            for handler in handlers {
+                let is_managed = handler
+                    .get("statusMessage")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|status| status.starts_with(status_prefix));
+                if !is_managed {
+                    continue;
+                }
+
+                found_managed_hook = true;
+                let target_paths = managed_hook_target_paths(agent, handler);
+                if !target_paths
+                    .as_ref()
+                    .is_some_and(|paths| paths.iter().all(|path| path_exists(path)))
+                {
+                    paths_are_valid = false;
+                }
+            }
+        }
+    }
+
+    if !found_managed_hook {
+        ManagedHookConfiguration::NotInstalled
+    } else if paths_are_valid {
+        ManagedHookConfiguration::Ready
+    } else {
+        ManagedHookConfiguration::NeedsReinstall
+    }
+}
+
+fn managed_hook_target_paths(
+    agent: &str,
+    handler: &serde_json::Value,
+) -> Option<Vec<std::path::PathBuf>> {
+    let command = handler.get("command")?.as_str()?;
+    let executable_path = managed_hook_executable_path(agent, command)?;
+    if agent == "claude" {
+        return Some(vec![executable_path]);
+    }
+
+    let wrapper_path = handler
+        .get("commandWindows")?
+        .as_str()
+        .and_then(managed_hook_wrapper_path)?;
+    Some(vec![executable_path, wrapper_path])
+}
+
+fn managed_hook_executable_path(agent: &str, command: &str) -> Option<std::path::PathBuf> {
+    let path = match agent {
+        "claude" => command.trim().trim_matches('"'),
+        _ => command.trim_start().strip_prefix('"')?.split_once('"')?.0,
+    };
+    (!path.is_empty()).then(|| std::path::PathBuf::from(path))
+}
+
+fn managed_hook_wrapper_path(command_windows: &str) -> Option<std::path::PathBuf> {
+    let (_, wrapper_and_args) = command_windows.split_once(r#"call ""#)?;
+    let (wrapper_path, _) = wrapper_and_args.split_once('\"')?;
+    (!wrapper_path.is_empty()).then(|| std::path::PathBuf::from(wrapper_path))
 }
 
 fn state_has_recent_activity(value: &serde_json::Value, agent: &str, now_ms: u64) -> bool {
@@ -681,7 +763,7 @@ mod tests {
     #[test]
     fn classifies_configured_without_recent_event_as_unverified() {
         assert_eq!(
-            classify_hook_status("codex", true, false, false),
+            classify_hook_status(ManagedHookConfiguration::Ready, false, false),
             HookStatus::ConfiguredUnverified
         );
     }
@@ -689,7 +771,7 @@ mod tests {
     #[test]
     fn classifies_recent_configured_event_as_active() {
         assert_eq!(
-            classify_hook_status("codex", true, true, false),
+            classify_hook_status(ManagedHookConfiguration::Ready, true, false),
             HookStatus::Active
         );
     }
@@ -697,7 +779,7 @@ mod tests {
     #[test]
     fn classifies_unconfigured_claude_as_not_installed() {
         assert_eq!(
-            classify_hook_status("claude", false, false, false),
+            classify_hook_status(ManagedHookConfiguration::NotInstalled, false, false),
             HookStatus::NotInstalled
         );
     }
@@ -705,8 +787,67 @@ mod tests {
     #[test]
     fn classifies_invalid_configuration_as_error() {
         assert_eq!(
-            classify_hook_status("codex", false, false, true),
+            classify_hook_status(ManagedHookConfiguration::NotInstalled, false, true),
             HookStatus::Error
+        );
+    }
+
+    #[test]
+    fn marks_managed_hooks_with_missing_targets_for_reinstall() {
+        let codex_config = json!({
+            "hooks": {
+                "SessionStart": [{
+                    "matcher": "startup|resume|clear|compact",
+                    "hooks": [{
+                        "type": "command",
+                        "command": "\"C:\\\\missing\\\\taskbar_widget_hook.exe\" codex SessionStart",
+                        "statusMessage": "CcTrafficLight Codex SessionStart"
+                    }]
+                }]
+            }
+        });
+        let claude_config = json!({
+            "hooks": {
+                "Stop": [{
+                    "hooks": [{
+                        "type": "command",
+                        "command": "C:\\\\missing\\\\taskbar_widget_hook.exe",
+                        "args": ["claude", "Stop"],
+                        "statusMessage": "CcTrafficLight Claude Stop"
+                    }]
+                }]
+            }
+        });
+
+        assert_eq!(
+            managed_hook_configuration(&codex_config, "codex", |_| false),
+            ManagedHookConfiguration::NeedsReinstall
+        );
+        assert_eq!(
+            managed_hook_configuration(&claude_config, "claude", |_| false),
+            ManagedHookConfiguration::NeedsReinstall
+        );
+    }
+
+    #[test]
+    fn recognizes_complete_managed_hook_targets_as_ready() {
+        let codex_config = json!({
+            "hooks": {
+                "SessionStart": [{
+                    "matcher": "startup|resume|clear|compact",
+                    "hooks": [{
+                        "type": "command",
+                        "command": "\"C:\\\\Program Files\\\\CC Traffic Light\\\\taskbar_widget_hook.exe\" codex SessionStart",
+                        "commandWindows": "cmd.exe /d /s /c call \"C:\\\\Users\\\\example\\\\AppData\\\\Local\\\\CcTrafficLight\\\\codex-taskbar-widget-hook.cmd\" codex SessionStart",
+                        "statusMessage": "CcTrafficLight Codex SessionStart"
+                    }]
+                }]
+            }
+        });
+
+        assert_eq!(
+            managed_hook_configuration(&codex_config, "codex", |_| true),
+            ManagedHookConfiguration::Ready
         );
     }
 

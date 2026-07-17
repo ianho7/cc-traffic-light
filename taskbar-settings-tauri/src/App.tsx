@@ -272,6 +272,8 @@ function App() {
           ) : page === "appearance" ? (
             <AppearancePage
               defaultPalette={bootstrap.default_widget_palette}
+              materialDisplaySizeMax={bootstrap.material_display_size_max_px}
+              materialDisplaySizeMin={bootstrap.material_display_size_min_px}
               pending={pending}
               settings={settings}
               onSettingChange={updateConfig}

@@ -16,6 +16,8 @@ pub struct SettingsBootstrapDto {
     pub pages: Vec<String>,
     pub about: SettingsAboutMetadataDto,
     pub default_widget_palette: WidgetPaletteConfig,
+    pub material_display_size_min_px: u8,
+    pub material_display_size_max_px: u8,
     pub snapshot: StatusSnapshotView,
     pub settings: AppConfig,
 }
@@ -54,6 +56,7 @@ pub struct SettingsRefreshResultDto {
 #[serde(rename_all = "snake_case")]
 pub enum HookStatus {
     NotInstalled,
+    NeedsReinstall,
     ConfiguredUnverified,
     Active,
     ProcessOnly,
@@ -64,6 +67,7 @@ impl HookStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::NotInstalled => "not_installed",
+            Self::NeedsReinstall => "needs_reinstall",
             Self::ConfiguredUnverified => "configured_unverified",
             Self::Active => "active",
             Self::ProcessOnly => "process_only",
@@ -155,7 +159,9 @@ pub enum SettingsIpcResponse {
     #[serde(rename = "get_hook_diagnostics")]
     GetHookDiagnostics { diagnostics: HookDiagnosticsDto },
     #[serde(rename = "get_runtime_log_diagnostics")]
-    GetRuntimeLogDiagnostics { diagnostics: RuntimeLogDiagnosticsDto },
+    GetRuntimeLogDiagnostics {
+        diagnostics: RuntimeLogDiagnosticsDto,
+    },
     #[serde(rename = "open_runtime_log_directory")]
     OpenRuntimeLogDirectory { directory_path: String },
     #[serde(rename = "install_codex_hooks")]

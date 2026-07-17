@@ -313,7 +313,7 @@ fn paint_overview(
         rgb(168, 168, 172),
     );
 
-    paint_source_card(hdc, snapshot, "codex", layout.codex_rect, "CODEX");
+    paint_source_card(hdc, snapshot, "codex", layout.codex_rect, "CHATGPT");
     paint_source_card(hdc, snapshot, "claude", layout.claude_rect, "CLAUDE");
 }
 
@@ -595,7 +595,7 @@ fn paint_diagnostics(
         hdc,
         snapshot,
         "codex",
-        "CODEX",
+        "CHATGPT",
         layout.diagnostics_card.left + 16,
         layout.diagnostics_card.top + 182,
     );

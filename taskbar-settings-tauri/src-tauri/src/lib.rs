@@ -11,8 +11,8 @@ use std::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use shared_core::{
     app_config::{
-        AppConfig, MaterialGroup, changed_keys, config_dir_path, config_file_path,
-        default_widget_palette,
+        AppConfig, MATERIAL_DISPLAY_SIZE_MAX_PX, MATERIAL_DISPLAY_SIZE_MIN_PX, MaterialGroup,
+        changed_keys, config_dir_path, config_file_path, default_widget_palette,
     },
     settings_service::{SourceStatusView, StatusSnapshotView},
     tauri_ipc::{
@@ -329,6 +329,8 @@ fn bootstrap_window(
             ],
             about: about_metadata(),
             default_widget_palette: default_widget_palette(),
+            material_display_size_min_px: MATERIAL_DISPLAY_SIZE_MIN_PX,
+            material_display_size_max_px: MATERIAL_DISPLAY_SIZE_MAX_PX,
             snapshot,
             settings,
         };
@@ -363,6 +365,8 @@ fn bootstrap_window(
         ],
         about: about_metadata(),
         default_widget_palette: default_widget_palette(),
+        material_display_size_min_px: MATERIAL_DISPLAY_SIZE_MIN_PX,
+        material_display_size_max_px: MATERIAL_DISPLAY_SIZE_MAX_PX,
         snapshot: guard.snapshot.clone(),
         settings: guard.settings.clone(),
     };

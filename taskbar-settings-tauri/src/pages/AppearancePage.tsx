@@ -4,6 +4,8 @@ import MaterialGroupsSection from "./MaterialLibraryPage";
 interface AppearancePageProps {
   settings: AppConfig;
   defaultPalette: WidgetPaletteConfig;
+  materialDisplaySizeMin: number;
+  materialDisplaySizeMax: number;
   pending: boolean;
   onSettingChange: (mutate: (draft: AppConfig) => void, appliedKeys: string[]) => void;
   onSettingsSaved: (settings: AppConfig) => void;
@@ -12,6 +14,8 @@ interface AppearancePageProps {
 export default function AppearancePage({
   settings,
   defaultPalette,
+  materialDisplaySizeMin,
+  materialDisplaySizeMax,
   pending,
   onSettingChange,
   onSettingsSaved
@@ -20,6 +24,8 @@ export default function AppearancePage({
     <div className="page-body appearance-materials">
       <MaterialGroupsSection
         defaultPalette={defaultPalette}
+        materialDisplaySizeMin={materialDisplaySizeMin}
+        materialDisplaySizeMax={materialDisplaySizeMax}
         onSettingChange={onSettingChange}
         pending={pending}
         settings={settings}

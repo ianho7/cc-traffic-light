@@ -37,6 +37,7 @@ interface HookManagementPanelProps {
 function statusDetails(status: HookStatus) {
   switch (status) {
     case "active": return { label: m.monitoring_status_active(), description: m.monitoring_status_active_note(), tone: "ok" as const };
+    case "needs_reinstall": return { label: m.monitoring_status_needs_reinstall(), description: m.monitoring_status_needs_reinstall_note(), tone: "warn" as const };
     case "configured_unverified": return { label: m.monitoring_status_configured(), description: m.monitoring_status_configured_note(), tone: "warn" as const };
     case "error": return { label: m.monitoring_status_error(), description: m.monitoring_status_error_note(), tone: "error" as const };
     case "process_only":

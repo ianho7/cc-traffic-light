@@ -24,37 +24,46 @@ import AgentLabel from "../components/shared/AgentLabel";
 
 type Tone = "green" | "yellow" | "red";
 type Agent = "codex" | "claude";
-type CroppedImages = Record<Tone, number[] | null>;
+type UploadedTones = Record<Tone, boolean>;
 type MaterialBrightness = { idle: number; blink: number; steady: number };
 
 interface MaterialGroupsSectionProps {
   settings: AppConfig;
   defaultPalette: WidgetPaletteConfig;
+  materialDisplaySizeMin: number;
+  materialDisplaySizeMax: number;
   pending: boolean;
   onSettingChange: (mutate: (draft: AppConfig) => void, appliedKeys: string[]) => void;
   onSettingsSaved: (settings: AppConfig) => void;
 }
 
 const TONES: Tone[] = ["green", "yellow", "red"];
-const EMPTY_IMAGES: CroppedImages = { green: null, yellow: null, red: null };
+const EMPTY_UPLOADED_TONES: UploadedTones = { green: false, yellow: false, red: false };
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const CROP_OUTPUT_SIZE = 64;
 const CROP_PREVIEW_MAX_SIZE = 1000;
-const MATERIAL_DISPLAY_SIZE_MIN = 16;
-const MATERIAL_DISPLAY_SIZE_MAX = 32;
+const MATERIAL_SIZE_SAVE_DEBOUNCE_MS = 120;
 const MATERIAL_IDLE_BRIGHTNESS_MAX = 80;
 const MATERIAL_BRIGHTNESS_MAX = 100;
 const DEFAULT_MATERIAL_BRIGHTNESS: MaterialBrightness = { idle: 42, blink: 100, steady: 100 };
 
+function emptyCropExporters(): Record<Tone, (() => Promise<number[] | null>) | null> {
+  return { green: null, yellow: null, red: null };
+}
+
 export default function MaterialGroupsSection({
   settings,
   defaultPalette,
+  materialDisplaySizeMin,
+  materialDisplaySizeMax,
   pending,
   onSettingChange,
   onSettingsSaved
 }: MaterialGroupsSectionProps) {
   const [name, setName] = useState("");
-  const [images, setImages] = useState<CroppedImages>(EMPTY_IMAGES);
+  const [uploadedTones, setUploadedTones] = useState<UploadedTones>(EMPTY_UPLOADED_TONES);
+  const [cropAsCircle, setCropAsCircle] = useState(false);
+  const cropExportersRef = useRef<Record<Tone, (() => Promise<number[] | null>) | null>>(emptyCropExporters());
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
@@ -63,6 +72,7 @@ export default function MaterialGroupsSection({
   const [builtinOpen, setBuiltinOpen] = useState(false);
   const [materialSize, setMaterialSize] = useState(settings.widget_visual.material_display_size_px);
   const [materialSettingsOpen, setMaterialSettingsOpen] = useState(false);
+  const materialSizeSaveTimerRef = useRef<number | null>(null);
   const [materialBrightness, setMaterialBrightness] = useState<MaterialBrightness>(() => ({
     idle: settings.widget_visual.material_idle_brightness_percent,
     blink: settings.widget_visual.material_blink_brightness_percent,
@@ -105,7 +115,9 @@ export default function MaterialGroupsSection({
 
   const resetEditor = () => {
     setName("");
-    setImages(EMPTY_IMAGES);
+    setUploadedTones(EMPTY_UPLOADED_TONES);
+    setCropAsCircle(false);
+    cropExportersRef.current = emptyCropExporters();
   };
 
   const startNewGroup = () => {
@@ -119,18 +131,22 @@ export default function MaterialGroupsSection({
   };
 
   const save = async () => {
-    if (!name.trim() || TONES.some((tone) => images[tone] === null)) return;
+    if (!name.trim() || TONES.some((tone) => !uploadedTones[tone])) return;
     setBusy(true);
     setFeedback(null);
     try {
+      const pngs = await Promise.all(TONES.map((tone) => cropExportersRef.current[tone]?.()));
+      if (pngs.some((png) => png === null || png === undefined)) {
+        throw new Error(m.material_save_error());
+      }
       const groupId = crypto.randomUUID();
       const result = await saveMaterialGroup(
         settings,
         groupId,
         name,
-        images.green!,
-        images.yellow!,
-        images.red!
+        pngs[0]!,
+        pngs[1]!,
+        pngs[2]!
       );
       await notifySettingsApplied(["widget_visual.material_groups"]);
       onSettingsSaved(result.settings);
@@ -179,15 +195,35 @@ export default function MaterialGroupsSection({
   const isBuiltinUsedByClaude = settings.widget_visual.claude_material_group_id === null;
   const hasMaterialGroups = settings.widget_visual.material_groups.length > 0;
 
-  const commitMaterialSize = () => {
-    if (materialSize === settings.widget_visual.material_display_size_px) return;
+  const commitMaterialSize = (size: number) => {
+    if (materialSizeSaveTimerRef.current !== null) {
+      window.clearTimeout(materialSizeSaveTimerRef.current);
+      materialSizeSaveTimerRef.current = null;
+    }
+    if (size === settings.widget_visual.material_display_size_px) return;
     onSettingChange(
       (draft) => {
-        draft.widget_visual.material_display_size_px = materialSize;
+        draft.widget_visual.material_display_size_px = size;
       },
       ["widget_visual.material_display_size_px"]
     );
   };
+
+  const queueMaterialSizeSave = (size: number) => {
+    if (materialSizeSaveTimerRef.current !== null) {
+      window.clearTimeout(materialSizeSaveTimerRef.current);
+    }
+    materialSizeSaveTimerRef.current = window.setTimeout(() => {
+      materialSizeSaveTimerRef.current = null;
+      commitMaterialSize(size);
+    }, MATERIAL_SIZE_SAVE_DEBOUNCE_MS);
+  };
+
+  useEffect(() => () => {
+    if (materialSizeSaveTimerRef.current !== null) {
+      window.clearTimeout(materialSizeSaveTimerRef.current);
+    }
+  }, []);
 
   const updateMaterialBrightness = (key: keyof MaterialBrightness, value: number) => {
     setMaterialBrightness((current) => {
@@ -467,20 +503,24 @@ export default function MaterialGroupsSection({
                   <div className="material-display-size__control">
                     <input
                       type="range"
-                      min={MATERIAL_DISPLAY_SIZE_MIN}
-                      max={MATERIAL_DISPLAY_SIZE_MAX}
+                      min={materialDisplaySizeMin}
+                      max={materialDisplaySizeMax}
                       step={1}
                       value={materialSize}
                       disabled={disabled}
                       aria-label={m.material_display_size_aria()}
-                      onChange={(event) => setMaterialSize(Number(event.currentTarget.value))}
-                      onPointerUp={commitMaterialSize}
+                      onChange={(event) => {
+                        const nextSize = Number(event.currentTarget.value);
+                        setMaterialSize(nextSize);
+                        queueMaterialSizeSave(nextSize);
+                      }}
+                      onPointerUp={(event) => commitMaterialSize(Number(event.currentTarget.value))}
                       onKeyUp={(event) => {
                         if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
-                          commitMaterialSize();
+                          commitMaterialSize(Number(event.currentTarget.value));
                         }
                       }}
-                      onBlur={commitMaterialSize}
+                      onBlur={(event) => commitMaterialSize(Number(event.currentTarget.value))}
                     />
                     <output>{materialSize}px</output>
                   </div>
@@ -520,15 +560,39 @@ export default function MaterialGroupsSection({
           </div>
           <label className="material-name">
             {m.material_name()}
-            <input disabled={disabled} value={name} onChange={(event) => setName(event.currentTarget.value)} maxLength={80} />
+            <input
+              disabled={disabled}
+              maxLength={80}
+              placeholder={m.material_name_placeholder()}
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </label>
+          <label className="material-crop-shape">
+            <input
+              checked={cropAsCircle}
+              disabled={disabled}
+              type="checkbox"
+              onChange={(event) => setCropAsCircle(event.currentTarget.checked)}
+            />
+            <span>{m.material_crop_circle()}</span>
           </label>
           <div className="material-crop-grid">
             {TONES.map((tone) => (
-              <CropSlot key={tone} tone={tone} disabled={disabled} onConfirm={(png) => setImages((current) => ({ ...current, [tone]: png }))} />
+              <CropSlot
+                key={tone}
+                cropAsCircle={cropAsCircle}
+                disabled={disabled}
+                onExporterChange={(exporter) => {
+                  cropExportersRef.current[tone] = exporter;
+                }}
+                onSourceChange={(ready) => setUploadedTones((current) => ({ ...current, [tone]: ready }))}
+                tone={tone}
+              />
             ))}
           </div>
           <div className="material-editor__actions">
-            <ActionButton disabled={disabled || !name.trim() || TONES.some((tone) => images[tone] === null)} onClick={save}>
+            <ActionButton disabled={disabled || !name.trim() || TONES.some((tone) => !uploadedTones[tone])} onClick={save}>
               {busy ? m.material_saving() : m.material_save()}
             </ActionButton>
           </div>
@@ -638,14 +702,25 @@ function MaterialEffectSlider({
   );
 }
 
-function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean; onConfirm: (png: number[]) => void }) {
+function CropSlot({
+  tone,
+  cropAsCircle,
+  disabled,
+  onExporterChange,
+  onSourceChange
+}: {
+  tone: Tone;
+  cropAsCircle: boolean;
+  disabled: boolean;
+  onExporterChange: (exporter: (() => Promise<number[] | null>) | null) => void;
+  onSourceChange: (ready: boolean) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourceRef = useRef<HTMLImageElement | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [previewSize, setPreviewSize] = useState(CROP_OUTPUT_SIZE);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [confirmed, setConfirmed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -663,6 +738,13 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
 
+    if (cropAsCircle) {
+      context.save();
+      context.beginPath();
+      context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      context.clip();
+    }
+
     const base = Math.max(size / image.naturalWidth, size / image.naturalHeight) * scale;
     const width = image.naturalWidth * base;
     const height = image.naturalHeight * base;
@@ -673,6 +755,7 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
       width,
       height
     );
+    if (cropAsCircle) context.restore();
   };
 
   const draw = () => {
@@ -684,6 +767,7 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
 
   const choose = (file: File | undefined) => {
     if (!file || !ACCEPTED_IMAGE_TYPES.includes(file.type) || file.size > 10 * 1024 * 1024) return;
+    onSourceChange(false);
     const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
@@ -696,22 +780,23 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
       setPreviewSize(Math.max(CROP_OUTPUT_SIZE, naturalCropSize));
       setScale(1);
       setOffset({ x: 0, y: 0 });
-      setConfirmed(false);
+      onSourceChange(true);
     };
     image.src = url;
   };
-  const confirm = () => {
-    if (!source) return;
+  const exportPng = async (): Promise<number[] | null> => {
+    if (!source) return null;
     const canvas = document.createElement("canvas");
     canvas.width = CROP_OUTPUT_SIZE;
     canvas.height = CROP_OUTPUT_SIZE;
     drawImage(canvas, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE / previewSize);
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      onConfirm(Array.from(new Uint8Array(await blob.arrayBuffer())));
-      setConfirmed(true);
-    }, "image/png");
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    return blob ? Array.from(new Uint8Array(await blob.arrayBuffer())) : null;
   };
+  useEffect(() => {
+    onExporterChange(source ? exportPng : null);
+    return () => onExporterChange(null);
+  }, [source, scale, offset, previewSize, cropAsCircle]);
   const toneLabel = tone === "green" ? m.appearance_green() : tone === "yellow" ? m.appearance_yellow() : m.appearance_red();
   return (
     <div className="crop-slot">
@@ -740,6 +825,7 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
       >
         <canvas
           ref={canvasRef}
+          className={cropAsCircle ? "crop-preview--circle" : undefined}
           width={previewSize}
           height={previewSize}
           onPointerDown={(event) => {
@@ -753,7 +839,6 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
             const dy = (event.clientY - dragRef.current.y) * previewSize / rect.height;
             dragRef.current = { x: event.clientX, y: event.clientY };
             setOffset((current) => ({ x: current.x + dx, y: current.y + dy }));
-            setConfirmed(false);
           }}
           onPointerUp={() => { dragRef.current = null; }}
         />
@@ -769,15 +854,9 @@ function CropSlot({ tone, disabled, onConfirm }: { tone: Tone; disabled: boolean
           max="3"
           step="0.01"
           value={scale}
-          onChange={(event) => {
-            setScale(Number(event.currentTarget.value));
-            setConfirmed(false);
-          }}
+          onChange={(event) => setScale(Number(event.currentTarget.value))}
         />
       </label>
-      <ActionButton size="compact" disabled={disabled || !source} onClick={confirm}>
-        {confirmed ? m.material_crop_confirmed() : m.material_confirm_crop()}
-      </ActionButton>
     </div>
   );
 }

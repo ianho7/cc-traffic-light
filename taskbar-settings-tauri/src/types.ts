@@ -107,6 +107,8 @@ export interface SettingsBootstrapDto {
   pages: SettingsPageId[];
   about: SettingsAboutMetadataDto;
   default_widget_palette: WidgetPaletteConfig;
+  material_display_size_min_px: number;
+  material_display_size_max_px: number;
   snapshot: StatusSnapshotView;
   settings: AppConfig;
 }
@@ -122,6 +124,7 @@ export interface SettingsRefreshResultDto {
 
 export type HookStatus =
   | "not_installed"
+  | "needs_reinstall"
   | "configured_unverified"
   | "active"
   | "process_only"

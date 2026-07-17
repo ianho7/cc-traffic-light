@@ -9,6 +9,7 @@ AppId={{B8F4A3D2-1C5E-4A7F-9B6D-8E2C3F1A5D7B}}
 SetupIconFile=taskbar-settings-tauri\src-tauri\icons\icon.ico
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+UninstallDisplayName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 ; 安装到用户本地 AppData，不需要管理员权限
 DefaultDirName={localappdata}\Programs\{#MyAppName}
@@ -30,22 +31,28 @@ english.AutoStartDescription=Start {#MyAppName} automatically with Windows
 chinesesimp.AutoStartDescription=开机自动启动 {#MyAppName}
 english.StartupOptions=Startup options:
 chinesesimp.StartupOptions=启动选项：
-english.DeployCodexHooks=Deploy Codex monitoring hooks
-chinesesimp.DeployCodexHooks=部署 Codex 监控 hooks
+english.DeployCodexHooks=Deploy ChatGPT monitoring hooks
+chinesesimp.DeployCodexHooks=部署 ChatGPT 监控 hooks
 english.DeployClaudeHooks=Deploy Claude Code monitoring hooks
 chinesesimp.DeployClaudeHooks=部署 Claude Code 监控 hooks
 english.RunApplication=Run {#MyAppName}
 chinesesimp.RunApplication=运行 {#MyAppName}
 english.UninstallOptionsTitle={#MyAppName} uninstall options
 chinesesimp.UninstallOptionsTitle={#MyAppName} 卸载选项
-english.UninstallOptionsDescription=Codex and Claude Code monitoring hooks managed by {#MyAppName} are kept by default. Selecting the option below removes only entries managed by this application and does not change other configuration.
-chinesesimp.UninstallOptionsDescription=默认保留 Codex 和 Claude Code 的 {#MyAppName} 监控 hooks。选择下方选项仅会移除本软件管理的条目，不会改动其他配置。
-english.RemoveMonitoringHooks=Remove {#MyAppName} monitoring hooks for Codex and Claude Code
-chinesesimp.RemoveMonitoringHooks=移除 {#MyAppName} 的 Codex / Claude Code 监控 hooks
-english.KeepHooks=Keep hooks
-chinesesimp.KeepHooks=保留 hooks
-english.ContinueUninstall=Continue uninstall
-chinesesimp.ContinueUninstall=继续卸载
+english.UninstallOptionsHeading=Uninstall {#MyAppName}?
+chinesesimp.UninstallOptionsHeading=卸载 {#MyAppName}？
+english.UninstallOptionsDescription={#MyAppName} will be removed from your computer.
+chinesesimp.UninstallOptionsDescription={#MyAppName} 将从您的电脑中移除。
+english.OptionalAction=Optional action
+chinesesimp.OptionalAction=可选操作
+english.RemoveMonitoringHooks=Also remove ChatGPT and Claude Code Hooks
+chinesesimp.RemoveMonitoringHooks=同时移除 ChatGPT 和 Claude Code Hooks
+english.RemoveMonitoringHooksHint=These Hooks were added by {#MyAppName}. Your other configuration will not be affected.
+chinesesimp.RemoveMonitoringHooksHint=这些 Hooks 由 {#MyAppName} 添加，其他配置不会受到影响。
+english.CancelUninstall=Cancel
+chinesesimp.CancelUninstall=取消
+english.ConfirmUninstall=Uninstall
+chinesesimp.ConfirmUninstall=卸载
 
 [Files]
 Source: "target\release\taskbar-widget.exe";        DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
@@ -85,78 +92,157 @@ Filename: "powershell.exe"; \
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:RunApplication}"; \
     Flags: postinstall nowait skipifsilent shellexec
 
-[UninstallRun]
-Filename: "powershell.exe"; \
-    Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-codex-hooks.ps1"" -Uninstall -Apply"; \
-    Flags: runhidden; Check: ShouldRemoveMonitoringHooks; \
-    RunOnceId: "RemoveCodexMonitoringHooks"
-Filename: "powershell.exe"; \
-    Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-claude-hooks.ps1"" -Uninstall -Apply"; \
-    Flags: runhidden; Check: ShouldRemoveMonitoringHooks; \
-    RunOnceId: "RemoveClaudeMonitoringHooks"
-
 [Code]
 var
   RemoveMonitoringHooks: Boolean;
 
-function ShouldRemoveMonitoringHooks(): Boolean;
+procedure WriteUninstallHookLog(const Message: String);
+var
+  LogPath: String;
 begin
-  Result := RemoveMonitoringHooks;
+  LogPath := ExpandConstant('{localappdata}\CcTrafficLight\logs\uninstall-hooks.log');
+  ForceDirectories(ExtractFileDir(LogPath));
+  SaveStringToFile(
+    LogPath,
+    GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') + ' [installer] ' + Message + #13#10,
+    True
+  );
+end;
+
+function BoolToLogValue(const Value: Boolean): String;
+begin
+  if Value then
+    Result := 'true'
+  else
+    Result := 'false';
+end;
+
+procedure RunHookRemoval(const Agent, ScriptName: String);
+var
+  ScriptPath, LogPath, Params: String;
+  ResultCode: Integer;
+begin
+  ScriptPath := ExpandConstant('{app}\scripts\' + ScriptName);
+  LogPath := ExpandConstant('{localappdata}\CcTrafficLight\logs\uninstall-hooks.log');
+  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath +
+    '" -Uninstall -Apply -ShowPaths -LogPath "' + LogPath + '"';
+
+  WriteUninstallHookLog('launch ' + Agent + ' hook cleanup script=' + ScriptPath);
+  if Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Params,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    WriteUninstallHookLog('complete ' + Agent + ' hook cleanup exit_code=' + IntToStr(ResultCode))
+  else
+    WriteUninstallHookLog('failed to launch ' + Agent + ' hook cleanup');
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+
+  WriteUninstallHookLog('uninstall step remove_hooks=' + BoolToLogValue(RemoveMonitoringHooks));
+  if not RemoveMonitoringHooks then begin
+    WriteUninstallHookLog('hook cleanup skipped by user selection');
+    Exit;
+  end;
+
+  RunHookRemoval('ChatGPT', 'install-codex-hooks.ps1');
+  RunHookRemoval('Claude Code', 'install-claude-hooks.ps1');
 end;
 
 function InitializeUninstall(): Boolean;
 var
   Form: TSetupForm;
-  Description: TNewStaticText;
+  Description, OptionalAction, RemoveHooksHint: TNewStaticText;
   RemoveHooksCheck: TNewCheckBox;
-  KeepButton, ContinueButton: TNewButton;
+  Heading: TNewStaticText;
+  CancelButton, UninstallButton: TNewButton;
 begin
   RemoveMonitoringHooks := False;
+  WriteUninstallHookLog('uninstall initialized');
   Result := True;
-  if UninstallSilent then
+  if UninstallSilent then begin
+    WriteUninstallHookLog('silent uninstall keeps monitoring hooks');
     Exit;
+  end;
 
-  Form := CreateCustomForm(ScaleX(430), ScaleY(170), False, False);
+  Form := CreateCustomForm(ScaleX(430), ScaleY(184), False, False);
   try
     Form.Caption := CustomMessage('UninstallOptionsTitle');
     Form.Position := poScreenCenter;
 
+    Heading := TNewStaticText.Create(Form);
+    Heading.Parent := Form;
+    Heading.Left := ScaleX(16);
+    Heading.Top := ScaleY(14);
+    Heading.Width := ScaleX(398);
+    Heading.Height := ScaleY(22);
+    Heading.Font.Style := [fsBold];
+    Heading.Font.Size := 10;
+    Heading.Caption := CustomMessage('UninstallOptionsHeading');
+
     Description := TNewStaticText.Create(Form);
     Description.Parent := Form;
     Description.Left := ScaleX(16);
-    Description.Top := ScaleY(16);
+    Description.Top := ScaleY(42);
     Description.Width := ScaleX(398);
-    Description.Height := ScaleY(44);
+    Description.Height := ScaleY(24);
     Description.WordWrap := True;
     Description.Caption := CustomMessage('UninstallOptionsDescription');
+
+    OptionalAction := TNewStaticText.Create(Form);
+    OptionalAction.Parent := Form;
+    OptionalAction.Left := ScaleX(16);
+    OptionalAction.Top := ScaleY(78);
+    OptionalAction.Width := ScaleX(398);
+    OptionalAction.Height := ScaleY(18);
+    OptionalAction.Font.Style := [fsBold];
+    OptionalAction.Caption := CustomMessage('OptionalAction');
 
     RemoveHooksCheck := TNewCheckBox.Create(Form);
     RemoveHooksCheck.Parent := Form;
     RemoveHooksCheck.Left := ScaleX(16);
-    RemoveHooksCheck.Top := ScaleY(72);
+    RemoveHooksCheck.Top := ScaleY(102);
     RemoveHooksCheck.Width := ScaleX(398);
     RemoveHooksCheck.Caption := CustomMessage('RemoveMonitoringHooks');
     RemoveHooksCheck.Checked := False;
 
-    KeepButton := TNewButton.Create(Form);
-    KeepButton.Parent := Form;
-    KeepButton.Left := ScaleX(216);
-    KeepButton.Top := ScaleY(122);
-    KeepButton.Width := ScaleX(92);
-    KeepButton.Caption := CustomMessage('KeepHooks');
-    KeepButton.Default := True;
-    KeepButton.ModalResult := mrCancel;
+    RemoveHooksHint := TNewStaticText.Create(Form);
+    RemoveHooksHint.Parent := Form;
+    RemoveHooksHint.Left := ScaleX(38);
+    RemoveHooksHint.Top := ScaleY(126);
+    RemoveHooksHint.Width := ScaleX(376);
+    RemoveHooksHint.Height := ScaleY(24);
+    RemoveHooksHint.WordWrap := True;
+    RemoveHooksHint.Caption := CustomMessage('RemoveMonitoringHooksHint');
 
-    ContinueButton := TNewButton.Create(Form);
-    ContinueButton.Parent := Form;
-    ContinueButton.Left := ScaleX(316);
-    ContinueButton.Top := ScaleY(122);
-    ContinueButton.Width := ScaleX(98);
-    ContinueButton.Caption := CustomMessage('ContinueUninstall');
-    ContinueButton.ModalResult := mrOk;
+    CancelButton := TNewButton.Create(Form);
+    CancelButton.Parent := Form;
+    CancelButton.Left := ScaleX(216);
+    CancelButton.Top := ScaleY(148);
+    CancelButton.Width := ScaleX(92);
+    CancelButton.Caption := CustomMessage('CancelUninstall');
+    CancelButton.Cancel := True;
+    CancelButton.ModalResult := mrCancel;
+
+    UninstallButton := TNewButton.Create(Form);
+    UninstallButton.Parent := Form;
+    UninstallButton.Left := ScaleX(316);
+    UninstallButton.Top := ScaleY(148);
+    UninstallButton.Width := ScaleX(98);
+    UninstallButton.Caption := CustomMessage('ConfirmUninstall');
+    UninstallButton.Default := True;
+    UninstallButton.ModalResult := mrOk;
 
     if Form.ShowModal = mrOk then
       RemoveMonitoringHooks := RemoveHooksCheck.Checked;
+    WriteUninstallHookLog('uninstall selection remove_hooks=' + BoolToLogValue(RemoveMonitoringHooks));
   finally
     Form.Free;
   end;

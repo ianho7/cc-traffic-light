@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 const CONFIG_FILE_NAME: &str = "config.json";
 const CONFIG_SCHEMA_VERSION: u32 = 7;
 pub const MATERIAL_DISPLAY_SIZE_MIN_PX: u8 = 16;
-pub const MATERIAL_DISPLAY_SIZE_MAX_PX: u8 = 32;
+pub const MATERIAL_DISPLAY_SIZE_MAX_PX: u8 = 48;
 pub const MATERIAL_IDLE_BRIGHTNESS_MAX_PERCENT: u8 = 80;
 pub const MATERIAL_BRIGHTNESS_MAX_PERCENT: u8 = 100;
 

@@ -5,10 +5,30 @@ param(
     [switch]$Apply,
     [switch]$Uninstall,
     [switch]$Restore,
-    [switch]$ShowPaths
+    [switch]$ShowPaths,
+    [string]$LogPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Write-HookUninstallLog {
+    param([string]$Message)
+
+    if ([string]::IsNullOrWhiteSpace($LogPath)) {
+        return
+    }
+
+    $directory = Split-Path -Parent $LogPath
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [codex-hooks] $Message" -Encoding utf8
+}
+
+trap {
+    Write-HookUninstallLog "error=$($_.Exception.Message)"
+    exit 1
+}
 
 if ([string]::IsNullOrWhiteSpace($HookExecutablePath)) {
     $installedHookPath = Join-Path (Split-Path -Parent $PSScriptRoot) "taskbar_widget_hook.exe"
@@ -547,17 +567,23 @@ if ($Restore) {
 $readResult = Read-HooksConfig -Path $HooksPath
 $specs = Get-DesiredEventSpecs -ExecutablePath $HookExecutablePath -WrapperPath $WrapperPath
 if ($Uninstall) {
+    Write-HookUninstallLog "start hooks_path=$(Format-PathForOutput $HooksPath)"
     $removeResult = Remove-ManagedHooks -HooksConfig $readResult.Config -Specs $specs
     if ($Apply -and $readResult.Exists -and $removeResult.RemovedCount -gt 0) {
         Write-HooksConfigAtomically -Path $HooksPath -Content (ConvertTo-PrettyJson $removeResult.Config)
     }
-    [pscustomobject][ordered]@{
+    $uninstallSummary = [pscustomobject][ordered]@{
         mode = if ($Apply) { "uninstall" } else { "uninstall-dry-run" }
         hooks_path = Format-PathForOutput $HooksPath
         written = ($Apply.IsPresent -and $readResult.Exists -and $removeResult.RemovedCount -gt 0)
         removed_count = $removeResult.RemovedCount
         event_summary = $removeResult.EventSummaries
-    } | ConvertTo-PrettyJson
+    }
+    Write-HookUninstallLog "complete removed_count=$($uninstallSummary.removed_count) written=$($uninstallSummary.written)"
+    foreach ($event in $removeResult.EventSummaries) {
+        Write-HookUninstallLog "event=$($event.event) removed=$($event.removed) other_entries=$($event.other_entries)"
+    }
+    $uninstallSummary | ConvertTo-Json -Depth 20
     exit 0
 }
 $mergeResult = Merge-HooksConfig -HooksConfig $readResult.Config -Specs $specs

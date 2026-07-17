@@ -288,6 +288,28 @@
   border-top: 1px solid var(--line, #deded8);
 }
 
+.material-crop-shape {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 0 16px 16px;
+  color: var(--ink, #151515);
+  cursor: pointer;
+}
+
+.material-crop-shape input {
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 0;
+  accent-color: var(--ink, #151515);
+}
+
+.material-crop-shape:has(input:disabled) {
+  cursor: not-allowed;
+  color: var(--muted, #777);
+}
+
 .crop-slot {
   display: grid;
   gap: 8px;
@@ -345,6 +367,10 @@
 
 .crop-slot canvas:active {
   cursor: grabbing;
+}
+
+.crop-slot canvas.crop-preview--circle {
+  border-radius: 50%;
 }
 
 .crop-slot input[type="file"] {

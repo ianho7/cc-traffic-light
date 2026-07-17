@@ -4,10 +4,26 @@ param(
     [switch]$Apply,
     [switch]$Uninstall,
     [switch]$Restore,
-    [switch]$ShowPaths
+    [switch]$ShowPaths,
+    [string]$LogPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Write-HookUninstallLog([string]$Message) {
+    if ([string]::IsNullOrWhiteSpace($LogPath)) { return }
+
+    $directory = Split-Path -Parent $LogPath
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    Add-Content -LiteralPath $LogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [claude-hooks] $Message" -Encoding utf8
+}
+
+trap {
+    Write-HookUninstallLog "error=$($_.Exception.Message)"
+    exit 1
+}
 $ManagedStatusPrefix = "CcTrafficLight Claude"
 $BackupSuffix = ".cc-traffic-light-hooks.bak"
 $BackupMetaSuffix = ".cc-traffic-light-hooks.bak.meta.json"
@@ -165,17 +181,23 @@ if ($Restore) { Restore-Settings | ConvertTo-Json -Depth 12; exit 0 }
 $read = Read-SettingsConfig
 $specs = Get-DesiredEventSpecs $HookExecutablePath
 if ($Uninstall) {
+    Write-HookUninstallLog "start settings_path=$(Format-PathForOutput $SettingsPath)"
     $remove = Remove-ManagedHooks $read.Config $specs
     if ($Apply -and $read.Exists -and $remove.RemovedCount -gt 0) {
         Write-Utf8NoBom $SettingsPath ($remove.Config | ConvertTo-Json -Depth 20)
     }
-    [pscustomobject]@{
+    $uninstallSummary = [pscustomobject]@{
         mode = if ($Apply) { "uninstall" } else { "uninstall-dry-run" }
         settings_path = Format-PathForOutput $SettingsPath
         written = ($Apply.IsPresent -and $read.Exists -and $remove.RemovedCount -gt 0)
         removed_count = $remove.RemovedCount
         event_summary = $remove.EventSummary
-    } | ConvertTo-Json -Depth 20
+    }
+    Write-HookUninstallLog "complete removed_count=$($uninstallSummary.removed_count) written=$($uninstallSummary.written)"
+    foreach ($event in $remove.EventSummary) {
+        Write-HookUninstallLog "event=$($event.event) removed=$($event.removed) other_entries=$($event.other_entries)"
+    }
+    $uninstallSummary | ConvertTo-Json -Depth 20
     exit 0
 }
 $merged = Merge-HooksConfig $read.Config $specs

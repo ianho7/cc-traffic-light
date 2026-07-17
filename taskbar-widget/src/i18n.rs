@@ -229,6 +229,9 @@ impl Localizer {
             HookStatus::NotInstalled => {
                 messages.push(self.text("tray.notification.codex_not_installed"));
             }
+            HookStatus::NeedsReinstall => {
+                messages.push(self.text("tray.notification.codex_needs_reinstall"));
+            }
             HookStatus::Error => messages.push(self.text("tray.notification.codex_error")),
             HookStatus::ProcessOnly => {}
         }
@@ -243,6 +246,9 @@ impl Localizer {
             }
             HookStatus::NotInstalled => {
                 messages.push(self.text("tray.notification.claude_not_installed"));
+            }
+            HookStatus::NeedsReinstall => {
+                messages.push(self.text("tray.notification.claude_needs_reinstall"));
             }
             HookStatus::Error => messages.push(self.text("tray.notification.claude_error")),
         }
@@ -354,7 +360,7 @@ mod tests {
             claude: HookStatus::ProcessOnly,
         });
 
-        assert!(message.contains("Codex hooks"));
+        assert!(message.contains("ChatGPT hooks"));
         assert!(message.contains("process detection only"));
     }
 }
